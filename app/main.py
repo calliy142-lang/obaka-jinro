@@ -304,5 +304,11 @@ def check_win_conditions(room: Room):
         room.phase = "result"
         room.result_text = "💀 インポスター陣営の勝利です！"
 
-# APIより後に静的ファイルをマウント
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# /static へのアクセスを static フォルダにマッピング
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# トップページ (/) にアクセスした時に index.html を返す
+@app.get("/")
+def read_root():
+    from fastapi.responses import FileResponse
+    return FileResponse("static/index.html")
