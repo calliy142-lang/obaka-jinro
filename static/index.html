@@ -2,88 +2,70 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>おバカ人狼</title>
-    <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 10px; background: #f4f6f9; }
-        .card { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; }
-        button { padding: 10px 15px; margin: 5px 0; cursor: pointer; border: none; border-radius: 5px; font-weight: bold; background: #007bff; color: white; width: 100%; }
-        button:hover { background: #0056b3; }
-        select, input { padding: 8px; width: 100%; margin: 5px 0 15px 0; box-sizing: border-box; }
-        .role-custom-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-        .role-custom-row input { width: 60px; margin: 0; }
-    </style>
+    <title>おバカ人狼 - 完全実装版</title>
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <h1>おバカ人狼</h1>
+    <div class="container">
+        <h1>おバカ人狼 カスタム</h1>
 
-    <!-- 参加・作成画面 -->
-    <div id="setup-screen" class="card">
-        <h2>ルーム参加 / 作成</h2>
-        <input type="text" id="usernameInput" placeholder="プレイヤー名">
-        <button onclick="handleCreateRoom()">部屋を作成</button>
-        <hr>
-        <input type="text" id="roomCodeInput" placeholder="部屋コード (4文字)">
-        <button onclick="handleJoinRoom()">部屋に参加</button>
-    </div>
+        <!-- ロビー画面 -->
+        <div id="lobbyPanel">
+            <input type="text" id="usernameInput" placeholder="プレイヤー名を入力">
+            <br>
+            <button onclick="handleCreateRoom()">部屋を作成する</button>
+            <hr>
+            <input type="text" id="roomCodeInput" placeholder="部屋コード (例: ABCD)">
+            <button onclick="handleJoinRoom()">部屋に参加する</button>
+        </div>
 
-    <!-- ロビー画面 -->
-    <div id="lobby-screen" class="card" style="display:none;">
-        <h2>ロビー (部屋コード: <span id="displayRoomCode"></span>)</h2>
-        <h3>参加者一覧:</h3>
-        <ul id="playerList"></ul>
+        <!-- ゲーム画面 -->
+        <div id="gamePanel" style="display:none;">
+            <h2>部屋コード: <span id="displayRoomCode"></span></h2>
+            <div id="phaseText" style="font-weight: bold; color: #333;"></div>
+            <div id="roleName" style="font-size: 1.2em; color: #007bff;"></div>
+            <div id="statusText"></div>
 
-        <div id="hostControls" style="display:none; border-top: 1px solid #ccc; padding-top: 15px;">
-            <h3>ゲーム設定（自由カスタム）</h3>
-            <label>昼の制限時間（秒）:</label>
-            <input type="number" id="dayTimerInput" value="60" min="10" max="300">
+            <!-- 結果メッセージ -->
+            <div id="resultBox" style="background: #f8f9fa; border: 1px solid #ccc; padding: 10px; margin-top: 10px; display:none;"></div>
 
-            <h4>役職別人数設定</h4>
-            <div id="roleDistContainer">
-                <div class="role-custom-row"><label>ドクター</label><input type="number" class="role-count" data-role="ドクター" value="1" min="0"></div>
-                <div class="role-custom-row"><label>ねずみ</label><input type="number" class="role-count" data-role="ねずみ" value="0" min="0"></div>
-                <div class="role-custom-row"><label>ポリス</label><input type="number" class="role-count" data-role="ポリス" value="0" min="0"></div>
-                <div class="role-custom-row"><label>トラッパー</label><input type="number" class="role-count" data-role="トラッパー" value="0" min="0"></div>
-                <div class="role-custom-row"><label>ルックアウト</label><input type="number" class="role-count" data-role="ルックアウト" value="0" min="0"></div>
-                <div class="role-custom-row"><label>インベスティゲーター</label><input type="number" class="role-count" data-role="インベスティゲーター" value="0" min="0"></div>
-                <div class="role-custom-row"><label>挑発者</label><input type="number" class="role-count" data-role="挑発者" value="0" min="0"></div>
-                <div class="role-custom-row"><label>トラッカー</label><input type="number" class="role-count" data-role="トラッカー" value="0" min="0"></div>
-                <div class="role-custom-row"><label>インポスター</label><input type="number" class="role-count" data-role="インポスター" value="1" min="0"></div>
-                <div class="role-custom-row"><label>シリアルキラー</label><input type="number" class="role-count" data-role="シリアルキラー" value="0" min="0"></div>
-                <div class="role-custom-row"><label>サバイバー</label><input type="number" class="role-count" data-role="サバイバー" value="0" min="0"></div>
-                <div class="role-custom-row"><label>魔術師</label><input type="number" class="role-count" data-role="魔術師" value="0" min="0"></div>
+            <!-- ホスト専用設定（17役職カスタム＆昼タイマー設定） -->
+            <div id="hostControls" style="display:none; border: 2px dashed #007bff; padding: 15px; margin-top: 15px;">
+                <h3>ホストルーム設定（全17役職自由カスタム）</h3>
+                <label>昼の制限時間（秒）: <input type="number" id="dayTimerInput" value="60" min="10" max="300"></label>
+                <div style="margin-top: 10px;">
+                    <h4>役職別人数配分</h4>
+                    <label>バカ: <input type="number" class="role-input" data-role="fool" value="0" min="0"></label>
+                    <label>ドクター: <input type="number" class="role-input" data-role="doctor" value="1" min="0"></label>
+                    <label>ねずみ: <input type="number" class="role-input" data-role="mouse" value="0" min="0"></label>
+                    <label>ポリス: <input type="number" class="role-input" data-role="police" value="1" min="0"></label>
+                    <label>トラッパー: <input type="number" class="role-input" data-role="trapper" value="0" min="0"></label>
+                    <label>ルックアウト: <input type="number" class="role-input" data-role="lookout" value="0" min="0"></label>
+                    <label>インベスティゲーター: <input type="number" class="role-input" data-role="investigator" value="1" min="0"></label>
+                    <label>挑発者: <input type="number" class="role-input" data-role="provoker" value="0" min="0"></label>
+                    <label>トラッカー: <input type="number" class="role-input" data-role="tracker" value="0" min="0"></label>
+                    <label>インポスター: <input type="number" class="role-input" data-role="imposter" value="1" min="0"></label>
+                    <label>ブレイマー: <input type="number" class="role-input" data-role="blaimer" value="0" min="0"></label>
+                    <label>クリーナー: <input type="number" class="role-input" data-role="cleaner" value="0" min="0"></label>
+                    <label>シリアルキラー: <input type="number" class="role-input" data-role="serial_killer" value="0" min="0"></label>
+                    <label>ボマー: <input type="number" class="role-input" data-role="bomber" value="0" min="0"></label>
+                    <label>サバイバー: <input type="number" class="role-input" data-role="survivor" value="0" min="0"></label>
+                    <label>シーフ: <input type="number" class="role-input" data-role="thief" value="0" min="0"></label>
+                    <label>ゴースト: <input type="number" class="role-input" data-role="ghost" value="0" min="0"></label>
+                    <label>魔術師: <input type="number" class="role-input" data-role="magician" value="0" min="0"></label>
+                </div>
+                <br>
+                <button onclick="handleStartGame()" style="background: #28a745; color: white; padding: 10px 20px; font-size: 1em;">ゲームスタート</button>
             </div>
-            <button onclick="handleStartGame()" style="background: #28a745; margin-top: 15px;">ゲームを開始</button>
+
+            <!-- アクション・投票エリア（パス選択肢対応） -->
+            <div id="actionArea" style="margin-top: 20px; display:none;">
+                <select id="targetSelect"></select>
+                <button id="actionBtn" onclick="handleActionSubmit()">実行する</button>
+            </div>
+            <div id="submittedText" style="color: green; font-weight: bold; margin-top: 10px; display:none;">アクション・投票を受け付けました。他のプレイヤーを待っています...</div>
         </div>
-        <button onclick="handleLeaveRoom()" style="background: #6c757d; margin-top: 10px;">部屋を退出</button>
     </div>
-
-    <!-- ゲーム画面（夜・昼共通） -->
-    <div id="game-screen" class="card" style="display:none;">
-        <h2 id="phaseText">フェーズ</h2>
-        <p>役職: <b id="roleName"></b></p>
-        <p id="statusText">状態: 生存</p>
-        <div id="timerDisplay" style="font-weight: bold; color: #dc3545; margin-bottom: 10px;"></div>
-        
-        <div id="resultBox" style="background: #e9ecef; padding: 10px; border-radius: 5px; margin-bottom: 10px; display:none;"></div>
-
-        <div id="actionArea">
-            <label id="actionLabel">能力対象:</label>
-            <select id="targetSelect"></select>
-            <button onclick="handleActionSubmit()" id="actionBtn">行動確定</button>
-        </div>
-        <button onclick="handleLeaveRoom()" style="background: #6c757d; margin-top: 15px;">部屋を退出</button>
-    </div>
-
-    <!-- 結果画面 -->
-    <div id="result-screen" class="card" style="display:none;">
-        <h2>ゲーム終了</h2>
-        <p id="gameResultText" style="font-size: 1.2em; font-weight: bold;"></p>
-        <h3>役職一覧</h3>
-        <table border="1" width="100%" id="summaryTable" style="border-collapse: collapse; text-align: left; padding: 5px;"></table>
-        <button onclick="handleReturnLobby()" style="background: #28a745; margin-top: 15px;">ロビーに戻る</button>
-    </div>
-
     <script src="/static/js/api.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
