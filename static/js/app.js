@@ -20,6 +20,12 @@ const voteBtn = document.getElementById('send-vote-btn');
 const returnLobbyBtn = document.getElementById('return-lobby-btn');
 const resultLeaveBtn = document.getElementById('result-leave-btn');
 
+// モーダル関連要素
+const guideModal = document.getElementById('guide-modal');
+const openGuideBtn = document.getElementById('open-guide-btn');
+const openGuideBtnNight = document.getElementById('open-guide-btn-night');
+const closeGuideBtn = document.getElementById('close-guide-btn');
+
 document.addEventListener('DOMContentLoaded', () => {
     if (createRoomBtn) createRoomBtn.addEventListener('click', handleCreateRoom);
     if (joinRoomBtn) joinRoomBtn.addEventListener('click', handleJoinRoom);
@@ -30,6 +36,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (voteBtn) voteBtn.addEventListener('click', handleSendVote);
     if (returnLobbyBtn) returnLobbyBtn.addEventListener('click', handleReturnLobby);
     if (resultLeaveBtn) resultLeaveBtn.addEventListener('click', handleLeaveRoom);
+
+    // モーダル表示イベント
+    if (openGuideBtn) openGuideBtn.onclick = () => guideModal.style.display = 'block';
+    if (openGuideBtnNight) openGuideBtnNight.onclick = () => guideModal.style.display = 'block';
+    if (closeGuideBtn) closeGuideBtn.onclick = () => guideModal.style.display = 'none';
+    window.onclick = (e) => { if (e.target === guideModal) guideModal.style.display = 'none'; };
 
     if (currentState.roomCode && currentState.playerId) {
         startPolling();
@@ -108,6 +120,7 @@ function clearStateStorage() {
 async function handleStartGame() {
     const impCount = parseInt(document.getElementById('setting-impostors').value) || 1;
     const neuCount = parseInt(document.getElementById('setting-neutrals').value) || 0;
+    const guaranteeFool = document.getElementById('setting-guarantee-fool').checked;
     const selectedRoles = Array.from(document.querySelectorAll('.innocent-role-cb:checked')).map(cb => cb.value);
 
     try {
@@ -118,6 +131,7 @@ async function handleStartGame() {
                 host_player_id: currentState.playerId,
                 impostor_count: impCount,
                 neutral_count: neuCount,
+                guarantee_fool: guaranteeFool,
                 selected_roles: selectedRoles
             })
         });
@@ -214,7 +228,7 @@ function renderUI(data) {
         
         const voteTargetSelect = document.getElementById('vote-target-select');
         const sendVoteBtn = document.getElementById('send-vote-btn');
-        const voteLabel = document.querySelector('label[for="vote-target-select"]') || document.querySelectorAll('#day-screen label')[0];
+        const voteLabel = document.querySelectorAll('#day-screen label')[0];
 
         if (!data.is_alive) {
             if (voteTargetSelect) voteTargetSelect.style.display = 'none';

@@ -36,6 +36,7 @@ class Player:
         self.displayed_role = "ドクター"
         self.camp = "innocent"
         self.camp_name = "イノセント陣営"
+        self.displayed_camp_name = "イノセント陣営"
         self.is_fool = False
         self.is_alive = True
         self.in_result_screen = False
@@ -76,6 +77,7 @@ class StartGameRequest(BaseModel):
     host_player_id: str
     impostor_count: int = 1
     neutral_count: int = 0
+    guarantee_fool: bool = True
     selected_roles: Optional[List[str]] = None
 
 class ReturnLobbyRequest(BaseModel):
@@ -142,7 +144,7 @@ def start_game(room_code: str, req: StartGameRequest):
     if len(players_list) < 3:
         raise HTTPException(status_code=400, detail="最低3人のプレイヤーが必要です")
 
-    assign_roles_feign(players_list, req.impostor_count, req.neutral_count, req.selected_roles)
+    assign_roles_feign(players_list, req.impostor_count, req.neutral_count, req.guarantee_fool, req.selected_roles)
 
     room.phase = "night"
     room.day_count = 1
@@ -154,7 +156,7 @@ def start_game(room_code: str, req: StartGameRequest):
     room.night_reports = {p.id: [] for p in players_list}
     return {"message": "ゲームを開始しました"}
 
-def assign_roles_feign(players: List[Player], imp_count: int, neu_count: int, selected_roles: Optional[List[str]] = None):
+def assign_roles_feign(players: List[Player], imp_count: int, neu_count: int, guarantee_fool: bool, selected_roles: Optional[List[str]] = None):
     default_innocents = ["ドクター", "ねずみ", "ポリス", "トラッパー", "ルックアウト", "インベスティゲーター", "挑発者", "トラッカー"]
     innocent_pool = [r for r in (selected_roles or default_innocents) if r in default_innocents]
     if not innocent_pool:
@@ -180,7 +182,11 @@ def assign_roles_feign(players: List[Player], imp_count: int, neu_count: int, se
         chosen_roles.append(random.choice(innocent_pool))
 
     innocent_indices = [i for i, r in enumerate(chosen_roles) if ROLES_INFO[r]["camp"] == "innocent" and ROLES_INFO[r]["can_be_fool"]]
-    fool_index = random.choice(innocent_indices) if innocent_indices else -1
+    fool_index = -1
+    if guarantee_fool and innocent_indices:
+        fool_index = random.choice(innocent_indices)
+    elif innocent_indices and random.random() < 0.5:
+        fool_index = random.choice(innocent_indices)
 
     for idx, player in enumerate(players):
         player.is_alive = True
@@ -194,10 +200,18 @@ def assign_roles_feign(players: List[Player], imp_count: int, neu_count: int, se
             player.real_role = "バカ"
             fake_roles = [r for r in innocent_pool if ROLES_INFO[r]["can_be_fool"]]
             player.displayed_role = random.choice(fake_roles) if fake_roles else "ドクター"
+            player.displayed_camp_name = "イノセント陣営"
+        elif player.camp == "impostor":
+            player.is_fool = False
+            player.real_role = role_name
+            # インポスターはイノセント陣営の役職を偽装する
+            player.displayed_role = random.choice(innocent_pool)
+            player.displayed_camp_name = "インポスター陣営"
         else:
             player.is_fool = False
             player.real_role = role_name
             player.displayed_role = role_name
+            player.displayed_camp_name = player.camp_name
 
 @app.get("/api/room/{room_code}/player/{player_id}")
 def get_player_info(room_code: str, player_id: str):
@@ -233,7 +247,7 @@ def get_player_info(room_code: str, player_id: str):
     return {
         "phase": player_phase,
         "is_host": me.is_host,
-        "displayed_role": f"{me.displayed_role} ({me.camp_name})",
+        "displayed_role": f"{me.displayed_role} （{me.displayed_camp_name}）",
         "camp": me.camp,
         "is_alive": me.is_alive,
         "all_players": all_p,
@@ -278,7 +292,6 @@ def send_kill(room_code: str, req: KillRequest):
 
 def check_and_resolve_night(room: Room):
     alive_players = [p for p in room.players.values() if p.is_alive]
-    # 生存者の行動が全員揃ったら処理を実行
     alive_action_count = sum(1 for p_id in room.night_actions if room.players[p_id].is_alive)
     if alive_action_count >= len(alive_players):
         resolve_night_phase(room)
@@ -290,40 +303,41 @@ def resolve_night_phase(room: Room):
     room.public_reports = []
 
     blocked_players = set()
-    trapped_houses = set()
+    trapped_houses = set()  # トラップが設置された家のターゲットプレイヤーID
     kills = set()
     healed = set()
 
-    # 1. トラッパーの仕掛け
+    # 1. トラッパーの仕掛け（ターゲットの「家」に罠を置く）
     for p_id, act in actions.items():
         p = players[p_id]
         if p.is_alive and p.real_role == "トラッパー" and not p.is_fool and act.get("target_id"):
             trapped_houses.add(act["target_id"])
 
-    # 2. 罠への進入・ポリスの阻止チェック
+    # 2. ポリス・トラッパー判定
     for p_id, act in actions.items():
         p = players[p_id]
         if not p.is_alive:
             continue
         target_id = act.get("target_id")
         
+        # ポリスの外出阻止
         if p.real_role == "ポリス" and not p.is_fool and target_id:
             blocked_players.add(target_id)
             room.night_reports[target_id].append("昨夜、ポリスに外出を阻止されました。")
 
-        if target_id in trapped_houses and p.real_role != "シリアルキラー":
+        # トラッパーの罠：『他人の家（target_id）を訪問した』かつ『その家（target_id）に罠がある』場合
+        if target_id and target_id in trapped_houses and target_id != p_id and p.real_role != "シリアルキラー":
             blocked_players.add(p_id)
             room.night_reports[p_id].append("昨夜、トラップにかかり能力失敗しました。")
-            room.public_reports.append(f"【全体通知】昨夜、{players[target_id].name} の家でトラップが発動しました！")
 
-    # 3. インポスター襲撃設定の検証
+    # 3. インポスター襲撃の検証（襲撃先がトラップされた家の場合、阻止）
     if room.impostor_kill_target:
         if room.impostor_kill_target in trapped_houses:
-            room.public_reports.append("【全体通知】昨夜、トラッパーによりインポスターの襲撃が防がれました！")
+            pass  # トラップにより襲撃阻止（全体通知は削除）
         else:
             kills.add(room.impostor_kill_target)
 
-    # 4. 各能力処理
+    # 4. 各能力実行
     for p_id, act in actions.items():
         if p_id in blocked_players or not players[p_id].is_alive:
             continue
@@ -348,7 +362,7 @@ def resolve_night_phase(room: Room):
         elif p.real_role == "シリアルキラー" and target_id:
             kills.add(target_id)
 
-    # 最終的な襲撃適用
+    # 最終殺害処理
     final_kills = kills - healed
     for k_id in final_kills:
         players[k_id].is_alive = False
@@ -357,7 +371,6 @@ def resolve_night_phase(room: Room):
     room.night_actions.clear()
     room.impostor_kill_target = None
 
-    # ★夜の襲撃後にも勝利判定を実施★
     if not check_win_conditions(room, is_night_kill=True):
         room.phase = "vote"
 
