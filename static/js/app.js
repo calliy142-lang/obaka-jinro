@@ -108,7 +108,6 @@ function clearStateStorage() {
 async function handleStartGame() {
     const impCount = parseInt(document.getElementById('setting-impostors').value) || 1;
     const neuCount = parseInt(document.getElementById('setting-neutrals').value) || 0;
-
     const selectedRoles = Array.from(document.querySelectorAll('.innocent-role-cb:checked')).map(cb => cb.value);
 
     try {
@@ -193,19 +192,42 @@ function renderUI(data) {
     } else if (data.phase === 'night') {
         showScreen('night-screen');
         document.getElementById('my-role-display').innerText = data.displayed_role;
-        document.getElementById('action-target-select').innerHTML = data.other_players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
         
+        const actionSection = document.getElementById('action-section');
         const killSection = document.getElementById('kill-section');
-        if (data.camp === 'impostor') {
-            killSection.style.display = 'block';
-            document.getElementById('kill-target-select').innerHTML = data.other_players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        } else {
+
+        if (!data.is_alive) {
+            actionSection.innerHTML = "<p style='color:red; font-weight:bold;'>あなたは死亡しています（観戦中...）</p>";
             killSection.style.display = 'none';
+        } else {
+            document.getElementById('action-target-select').innerHTML = data.other_players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            if (data.camp === 'impostor') {
+                killSection.style.display = 'block';
+                document.getElementById('kill-target-select').innerHTML = data.other_players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            } else {
+                killSection.style.display = 'none';
+            }
         }
     } else if (data.phase === 'day' || data.phase === 'vote') {
         showScreen('day-screen');
         document.getElementById('night-report-box').innerHTML = data.night_report || "昨夜は報告がありません。";
-        document.getElementById('vote-target-select').innerHTML = data.other_players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        
+        const voteTargetSelect = document.getElementById('vote-target-select');
+        const sendVoteBtn = document.getElementById('send-vote-btn');
+        const voteLabel = document.querySelector('label[for="vote-target-select"]') || document.querySelectorAll('#day-screen label')[0];
+
+        if (!data.is_alive) {
+            if (voteTargetSelect) voteTargetSelect.style.display = 'none';
+            if (sendVoteBtn) sendVoteBtn.style.display = 'none';
+            if (voteLabel) voteLabel.innerText = "あなたは死亡しています（観戦中...）";
+        } else {
+            if (voteTargetSelect) {
+                voteTargetSelect.style.display = 'block';
+                voteTargetSelect.innerHTML = data.other_players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            }
+            if (sendVoteBtn) sendVoteBtn.style.display = 'inline-block';
+            if (voteLabel) voteLabel.innerText = "追放するプレイヤーを選択:";
+        }
     } else if (data.phase === 'result') {
         showScreen('result-screen');
         document.getElementById('game-result-text').innerText = data.result;

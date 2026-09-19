@@ -150,6 +150,7 @@ def start_game(room_code: str, req: StartGameRequest):
     room.impostor_kill_target = None
     room.votes.clear()
     room.public_reports.clear()
+    room.last_vote_result = ""
     room.night_reports = {p.id: [] for p in players_list}
     return {"message": "ゲームを開始しました"}
 
@@ -250,7 +251,7 @@ def send_action(room_code: str, req: ActionRequest):
     
     player = room.players.get(req.player_id)
     if not player or not player.is_alive:
-        raise HTTPException(status_code=400, detail="行動不可")
+        raise HTTPException(status_code=400, detail="死亡しているため行動できません")
 
     room.night_actions[req.player_id] = {
         "target_id": req.target_id,
@@ -266,7 +267,9 @@ def send_kill(room_code: str, req: KillRequest):
         raise HTTPException(status_code=400, detail="夜フェーズではありません")
     
     player = room.players.get(req.player_id)
-    if not player or player.camp != "impostor":
+    if not player or not player.is_alive:
+        raise HTTPException(status_code=400, detail="死亡しているため行動できません")
+    if player.camp != "impostor":
         raise HTTPException(status_code=403, detail="インポスターのみ指定可能です")
 
     room.impostor_kill_target = req.target_id
@@ -275,7 +278,9 @@ def send_kill(room_code: str, req: KillRequest):
 
 def check_and_resolve_night(room: Room):
     alive_players = [p for p in room.players.values() if p.is_alive]
-    if len(room.night_actions) >= len(alive_players):
+    # 生存者の行動が全員揃ったら処理を実行
+    alive_action_count = sum(1 for p_id in room.night_actions if room.players[p_id].is_alive)
+    if alive_action_count >= len(alive_players):
         resolve_night_phase(room)
 
 def resolve_night_phase(room: Room):
@@ -289,38 +294,38 @@ def resolve_night_phase(room: Room):
     kills = set()
     healed = set()
 
-    # 1. トラッパーの仕掛け（バカではない場合のみ発動）
+    # 1. トラッパーの仕掛け
     for p_id, act in actions.items():
         p = players[p_id]
-        if p.real_role == "トラッパー" and not p.is_fool and act.get("target_id"):
+        if p.is_alive and p.real_role == "トラッパー" and not p.is_fool and act.get("target_id"):
             trapped_houses.add(act["target_id"])
 
     # 2. 罠への進入・ポリスの阻止チェック
     for p_id, act in actions.items():
         p = players[p_id]
+        if not p.is_alive:
+            continue
         target_id = act.get("target_id")
         
         if p.real_role == "ポリス" and not p.is_fool and target_id:
             blocked_players.add(target_id)
             room.night_reports[target_id].append("昨夜、ポリスに外出を阻止されました。")
 
-        # 罠のある場所へ訪問したプレイヤーをブロック
         if target_id in trapped_houses and p.real_role != "シリアルキラー":
             blocked_players.add(p_id)
             room.night_reports[p_id].append("昨夜、トラップにかかり能力失敗しました。")
             room.public_reports.append(f"【全体通知】昨夜、{players[target_id].name} の家でトラップが発動しました！")
 
-    # 3. インポスター襲撃設定の検証（トラッパーの罠にかかっている家への襲撃または罠にかかった襲撃者を無効化）
+    # 3. インポスター襲撃設定の検証
     if room.impostor_kill_target:
-        # トラップのある家を襲撃しようとした場合、襲撃は阻止される
         if room.impostor_kill_target in trapped_houses:
             room.public_reports.append("【全体通知】昨夜、トラッパーによりインポスターの襲撃が防がれました！")
         else:
             kills.add(room.impostor_kill_target)
 
-    # 4. 各能力処理（ブロックされていないプレイヤーのみ）
+    # 4. 各能力処理
     for p_id, act in actions.items():
-        if p_id in blocked_players:
+        if p_id in blocked_players or not players[p_id].is_alive:
             continue
         
         p = players[p_id]
@@ -349,9 +354,12 @@ def resolve_night_phase(room: Room):
         players[k_id].is_alive = False
         room.night_reports[k_id].append("あなたは昨夜死亡しました。")
 
-    room.phase = "vote"
     room.night_actions.clear()
     room.impostor_kill_target = None
+
+    # ★夜の襲撃後にも勝利判定を実施★
+    if not check_win_conditions(room, is_night_kill=True):
+        room.phase = "vote"
 
 @app.post("/api/room/{room_code}/vote")
 def send_vote(room_code: str, req: VoteRequest):
@@ -359,10 +367,16 @@ def send_vote(room_code: str, req: VoteRequest):
     if not room or room.phase != "vote":
         raise HTTPException(status_code=400, detail="投票フェーズではありません")
 
+    player = room.players.get(req.player_id)
+    if not player or not player.is_alive:
+        raise HTTPException(status_code=400, detail="死亡しているため投票できません")
+
     room.votes[req.player_id] = req.target_id
 
     alive_players = [p for p in room.players.values() if p.is_alive]
-    if len(room.votes) >= len(alive_players):
+    alive_vote_count = sum(1 for p_id in room.votes if room.players[p_id].is_alive)
+    
+    if alive_vote_count >= len(alive_players):
         resolve_vote_phase(room)
 
     return {"message": "投票完了"}
@@ -370,7 +384,7 @@ def send_vote(room_code: str, req: VoteRequest):
 def resolve_vote_phase(room: Room):
     counts: Dict[str, int] = {}
     for voter_id, target_id in room.votes.items():
-        if target_id:
+        if room.players[voter_id].is_alive and target_id:
             counts[target_id] = counts.get(target_id, 0) + 1
 
     if counts:
@@ -387,21 +401,23 @@ def resolve_vote_phase(room: Room):
         room.night_actions.clear()
         room.votes.clear()
 
-def check_win_conditions(room: Room) -> bool:
+def check_win_conditions(room: Room, is_night_kill: bool = False) -> bool:
     alive = [p for p in room.players.values() if p.is_alive]
     innocents = [p for p in alive if p.camp == "innocent"]
     impostors = [p for p in alive if p.camp == "impostor"]
     neutrals = [p for p in alive if p.camp == "neutral"]
 
+    prefix = "【昨夜の襲撃結果】" if is_night_kill else f"【結果】{room.last_vote_result}\n"
+
     if len(impostors) == 0 and len(neutrals) == 0:
         room.phase = "result"
-        room.result_text = f"【結果】{room.last_vote_result}\n🎉 イノセント陣営の勝利！"
+        room.result_text = f"{prefix}🎉 イノセント陣営の勝利！"
         for p in room.players.values():
             p.in_result_screen = True
         return True
     elif len(impostors) >= len(innocents) + len(neutrals):
         room.phase = "result"
-        room.result_text = f"【結果】{room.last_vote_result}\n💀 インポスター陣営の勝利！"
+        room.result_text = f"{prefix}💀 インポスター陣営の勝利！"
         for p in room.players.values():
             p.in_result_screen = True
         return True
