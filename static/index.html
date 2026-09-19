@@ -118,6 +118,30 @@
              style="background:#f8f9fa;border:1px solid #ccc;padding:10px;border-radius:4px;margin-top:15px;display:none;">
         </div>
 
+        <!-- ゲーム終了・再戦 -->
+        <div id="resultActions"
+             class="panel"
+             style="display:none;border:2px solid #28a745;text-align:center;">
+            <h3 style="margin-top:0;">ゲーム終了</h3>
+            <p id="resultWinnerText" style="font-weight:bold;"></p>
+
+            <button id="rematchButton"
+                    onclick="handleRematch()"
+                    style="background:#28a745;color:white;border:none;padding:10px 20px;font-size:1em;border-radius:4px;width:100%;margin-bottom:10px;">
+                同じルームでもう一度遊ぶ
+            </button>
+
+            <p id="rematchWaitingText"
+               style="display:none;color:#666;margin:8px 0;">
+                再戦準備中です。ホストがゲームを開始できます。
+            </p>
+
+            <button onclick="leaveRoom()"
+                    style="background:#6c757d;color:white;border:none;padding:8px 20px;border-radius:4px;width:100%;">
+                ロビーに戻る
+            </button>
+        </div>
+
         <div id="privateReportBox" class="private-report" style="display:none;"></div>
 
         <!-- ホスト設定 -->

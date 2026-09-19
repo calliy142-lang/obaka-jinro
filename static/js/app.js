@@ -3,6 +3,7 @@ let currentPlayerId = null;
 let pollInterval = null;
 let currentDistMode = "individual";
 
+
 function switchMode(mode) {
     currentDistMode = mode;
 
@@ -14,32 +15,36 @@ function switchMode(mode) {
     if (mode === "individual") {
         btnInd.style.background = "#007bff";
         btnInd.style.color = "white";
+
         btnFac.style.background = "#e0e0e0";
         btnFac.style.color = "#333";
+
         secInd.style.display = "block";
         secFac.style.display = "none";
     } else {
         btnFac.style.background = "#007bff";
         btnFac.style.color = "white";
+
         btnInd.style.background = "#e0e0e0";
         btnInd.style.color = "#333";
+
         secFac.style.display = "block";
         secInd.style.display = "none";
     }
 }
 
+
 function toggleRoleGuide() {
     const guidePanel = document.getElementById("roleGuidePanel");
 
-    if (
-        guidePanel.style.display === "none" ||
-        guidePanel.style.display === ""
-    ) {
+    if (guidePanel.style.display === "none" ||
+        guidePanel.style.display === "") {
         guidePanel.style.display = "block";
     } else {
         guidePanel.style.display = "none";
     }
 }
+
 
 async function handleCreateRoom() {
     const name = document.getElementById("usernameInput").value.trim();
@@ -51,9 +56,14 @@ async function handleCreateRoom() {
 
     try {
         const data = await API.createRoom();
+
         currentRoomCode = data.room_code;
 
-        const joinData = await API.joinRoom(currentRoomCode, name);
+        const joinData = await API.joinRoom(
+            currentRoomCode,
+            name
+        );
+
         currentPlayerId = joinData.player_id;
 
         localStorage.setItem("roomCode", currentRoomCode);
@@ -61,16 +71,19 @@ async function handleCreateRoom() {
 
         showGameScreen();
         startPolling();
+
     } catch (err) {
         alert(err.message);
     }
 }
 
+
 async function handleJoinRoom() {
     const name = document.getElementById("usernameInput").value.trim();
     const code = document
         .getElementById("roomCodeInput")
-        .value.trim()
+        .value
+        .trim()
         .toUpperCase();
 
     if (!name || !code) {
@@ -79,7 +92,10 @@ async function handleJoinRoom() {
     }
 
     try {
-        const joinData = await API.joinRoom(code, name);
+        const joinData = await API.joinRoom(
+            code,
+            name
+        );
 
         currentRoomCode = joinData.room_code;
         currentPlayerId = joinData.player_id;
@@ -89,16 +105,21 @@ async function handleJoinRoom() {
 
         showGameScreen();
         startPolling();
+
     } catch (err) {
         alert(err.message);
     }
 }
 
+
 function showGameScreen() {
     document.getElementById("lobbyPanel").style.display = "none";
     document.getElementById("gamePanel").style.display = "block";
-    document.getElementById("displayRoomCode").innerText = currentRoomCode;
+
+    document.getElementById("displayRoomCode").innerText =
+        currentRoomCode;
 }
+
 
 function leaveRoom() {
     if (pollInterval) {
@@ -114,12 +135,23 @@ function leaveRoom() {
 
     document.getElementById("gamePanel").style.display = "none";
     document.getElementById("lobbyPanel").style.display = "block";
+
     document.getElementById("resultBox").style.display = "none";
+
+    const resultActions =
+        document.getElementById("resultActions");
+
+    if (resultActions) {
+        resultActions.style.display = "none";
+    }
+
     document.getElementById("roleGuidePanel").style.display = "none";
 }
 
+
 async function handleStartGame() {
-    const dayTimer = document.getElementById("dayTimerInput").value;
+    const dayTimer =
+        document.getElementById("dayTimerInput").value;
 
     const settingsPayload = {
         host_player_id: currentPlayerId,
@@ -128,7 +160,9 @@ async function handleStartGame() {
     };
 
     if (currentDistMode === "individual") {
-        const roleInputs = document.querySelectorAll(".role-input");
+        const roleInputs =
+            document.querySelectorAll(".role-input");
+
         const roleDistribution = {};
 
         roleInputs.forEach(input => {
@@ -136,7 +170,9 @@ async function handleStartGame() {
                 parseInt(input.value) || 0;
         });
 
-        settingsPayload.role_distribution = roleDistribution;
+        settingsPayload.role_distribution =
+            roleDistribution;
+
     } else {
         settingsPayload.faction_distribution = {
             innocent:
@@ -166,10 +202,12 @@ async function handleStartGame() {
             currentRoomCode,
             currentPlayerId
         );
+
     } catch (err) {
         alert(err.message);
     }
 }
+
 
 function buildRoleActionUI(info) {
     const actionArea =
@@ -206,16 +244,12 @@ function buildRoleActionUI(info) {
 
     const role = info.displayed_role;
 
-    /*
-     * 魔術師
-     */
+
     if (role === "魔術師") {
         actionHelp.innerText =
             "ターゲットの役職を予想してください。正解ならターゲットを殺害、外れると自分が死亡します。";
 
-        const label =
-            document.createElement("label");
-
+        const label = document.createElement("label");
         label.innerText = "予想役職: ";
 
         const guessSelect =
@@ -246,8 +280,7 @@ function buildRoleActionUI(info) {
         ];
 
         roles.forEach(([id, name]) => {
-            const opt =
-                document.createElement("option");
+            const opt = document.createElement("option");
 
             opt.value = id;
             opt.innerText = name;
@@ -259,9 +292,7 @@ function buildRoleActionUI(info) {
         extraArea.appendChild(label);
     }
 
-    /*
-     * ボマー
-     */
+
     if (role === "ボマー") {
         actionHelp.innerText =
             "爆弾を仕掛けるか、すでに仕掛けた爆弾を起爆します。";
@@ -290,86 +321,106 @@ function buildRoleActionUI(info) {
         extraArea.appendChild(bombMode);
     }
 
+
     if (role === "シーフ") {
         actionHelp.innerText =
             "選択したプレイヤーを殺害し、その役職を盗みます。";
     }
+
 
     if (role === "ねずみ") {
         actionHelp.innerText =
             "1回だけ使用できます。調査結果は次の昼に全員へ公表されます。";
     }
 
+
     if (role === "挑発者") {
         actionHelp.innerText =
             "対象の次の昼の票数を+2します。残り2回まで使用できます。";
     }
+
 
     if (role === "ドクター") {
         actionHelp.innerText =
             "対象が夜に死亡した場合、蘇生できます。同じ対象を2夜連続では選べません。";
     }
 
+
     if (role === "ポリス") {
         actionHelp.innerText =
             "対象の夜能力を封じます。同じ対象を2夜連続では選べません。";
     }
+
 
     if (role === "トラッパー") {
         actionHelp.innerText =
             "対象の家に罠を仕掛け、そこを訪れた人のうち1人をランダムに封じます。";
     }
 
+
     if (role === "ルックアウト") {
         actionHelp.innerText =
             "対象の家を訪れたプレイヤーを確認します。";
     }
+
 
     if (role === "インベスティゲーター") {
         actionHelp.innerText =
             "対象の役職候補を2つに絞り込みます。";
     }
 
+
     if (role === "トラッカー") {
         actionHelp.innerText =
             "対象が夜に訪れた家を確認します。";
     }
+
 
     if (role === "ゴースト") {
         actionHelp.innerText =
             "対象の家にろうそくを置き、投票で追放された場合は次の夜に復讐します。";
     }
 
+
     if (role === "バカ") {
         actionHelp.innerText =
             "あなたには別のイノセント役職に見えていますが、実際には能力を持ちません。";
     }
+
 
     if (role === "インポスター") {
         actionHelp.innerText =
             "夜に対象プレイヤーを襲撃します。";
     }
 
+
     if (role === "ブレイマー") {
         actionHelp.innerText =
             "対象の死亡・追放時の役職表示をインポスターに見せます。残り2回まで使用できます。";
     }
+
 
     if (role === "クリーナー") {
         actionHelp.innerText =
             "対象が死亡・追放された際、その役職を不明にします。";
     }
 
+
     if (role === "シリアルキラー") {
         actionHelp.innerText =
             "対象を殺害します。ポリスやトラッパーでは止まりません。";
     }
 
+
     if (role === "サバイバー") {
         actionHelp.innerText =
             "夜の行動はありません。殺害されても最大3回まで復活します。";
     }
+
+
+    actionArea.style.display = "block";
 }
+
 
 async function handleActionSubmit() {
     const targetId =
@@ -383,14 +434,16 @@ async function handleActionSubmit() {
         document.getElementById("roleGuessSelect");
 
     if (guessSelect) {
-        action.guessed_role = guessSelect.value;
+        action.guessed_role =
+            guessSelect.value;
     }
 
     const bombMode =
         document.getElementById("bombModeSelect");
 
     if (bombMode) {
-        action.bomb_action = bombMode.value;
+        action.bomb_action =
+            bombMode.value;
     }
 
     try {
@@ -411,26 +464,26 @@ async function handleActionSubmit() {
     }
 }
 
+
 function renderPrivateReports(info) {
     const box =
         document.getElementById("privateReportBox");
 
     if (!box) return;
 
-    if (
-        !info.private_reports ||
-        info.private_reports.length === 0
-    ) {
+    if (!info.private_reports ||
+        info.private_reports.length === 0) {
+
         box.style.display = "none";
         box.innerText = "";
+
         return;
     }
 
     box.innerHTML = "";
 
     info.private_reports.forEach(report => {
-        const div =
-            document.createElement("div");
+        const div = document.createElement("div");
 
         div.innerText = report;
         div.style.marginBottom = "6px";
@@ -441,6 +494,7 @@ function renderPrivateReports(info) {
     box.style.display = "block";
 }
 
+
 function renderVoteArea(info) {
     const voteArea =
         document.getElementById("voteArea");
@@ -448,14 +502,16 @@ function renderVoteArea(info) {
     const voteSelect =
         document.getElementById("voteSelect");
 
-    if (!voteArea || !voteSelect) return;
+    if (!voteArea || !voteSelect) {
+        return;
+    }
 
-    if (
-        info.phase !== "DAY" ||
+    if (info.phase !== "DAY" ||
         !info.alive ||
-        info.action_submitted
-    ) {
+        info.action_submitted) {
+
         voteArea.style.display = "none";
+
         return;
     }
 
@@ -484,6 +540,7 @@ function renderVoteArea(info) {
     voteArea.style.display = "block";
 }
 
+
 async function handleVoteSubmit() {
     const targetId =
         document.getElementById("voteSelect").value;
@@ -506,6 +563,7 @@ async function handleVoteSubmit() {
     }
 }
 
+
 function resetDayUI() {
     const votedText =
         document.getElementById("votedText");
@@ -515,19 +573,273 @@ function resetDayUI() {
     }
 }
 
-function startPolling() {
-    if (pollInterval) {
-        clearInterval(pollInterval);
+
+function renderResultActions(info) {
+    const resultActions =
+        document.getElementById("resultActions");
+
+    const rematchButton =
+        document.getElementById("rematchButton");
+
+    const rematchWaitingText =
+        document.getElementById("rematchWaitingText");
+
+    if (!resultActions) {
+        return;
     }
 
-    pollInterval =
-        setInterval(updateGameState, 2000);
+    if (info.phase !== "RESULT") {
+        resultActions.style.display = "none";
+        return;
+    }
 
-    updateGameState();
+    resultActions.style.display = "block";
+
+    const isHost =
+        info.is_host === true;
+
+    if (rematchButton) {
+        rematchButton.style.display =
+            isHost ? "inline-block" : "none";
+    }
+
+    if (rematchWaitingText) {
+        rematchWaitingText.style.display =
+            isHost ? "none" : "block";
+
+        rematchWaitingText.innerText =
+            "ホストが再戦を開始するまでお待ちください。";
+    }
 }
 
-async function updateGameState() {
+
+async function handleRematch() {
     if (!currentRoomCode || !currentPlayerId) {
+        return;
+    }
+
+    try {
+        await API.rematchRoom(
+            currentRoomCode,
+            currentPlayerId
+        );
+
+        document.getElementById("resultActions").style.display =
+            "none";
+
+        document.getElementById("resultBox").style.display =
+            "none";
+
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+
+function renderHostControls(info) {
+    const hostControls =
+        document.getElementById("hostControls");
+
+    if (!hostControls) {
+        return;
+    }
+
+    if (info.phase === "SETUP" && info.is_host) {
+        hostControls.style.display = "block";
+    } else {
+        hostControls.style.display = "none";
+    }
+}
+
+
+function renderRole(info) {
+    const roleName =
+        document.getElementById("roleName");
+
+    if (!roleName) return;
+
+    roleName.innerText =
+        info.displayed_role || "役職未決定";
+
+    roleName.dataset.role =
+        info.displayed_role || "";
+}
+
+
+function renderPhase(info) {
+    const phaseText =
+        document.getElementById("phaseText");
+
+    if (!phaseText) return;
+
+    const phaseNames = {
+        SETUP: "待機中",
+        NIGHT: "夜",
+        DAY: "昼",
+        RESULT: "結果"
+    };
+
+    phaseText.innerText =
+        phaseNames[info.phase] || info.phase;
+}
+
+
+function renderStatus(info) {
+    const statusText =
+        document.getElementById("statusText");
+
+    if (!statusText) return;
+
+    if (info.alive) {
+        statusText.innerText = "生存";
+        statusText.style.color = "green";
+    } else {
+        statusText.innerText = "死亡";
+        statusText.style.color = "red";
+    }
+}
+
+
+function renderResult(info) {
+    const resultBox =
+        document.getElementById("resultBox");
+
+    if (!resultBox) return;
+
+    if (info.phase !== "RESULT") {
+        resultBox.style.display = "none";
+        return;
+    }
+
+    resultBox.style.display = "block";
+
+    const winnerText =
+        info.winner_faction ||
+        info.message ||
+        "ゲーム終了";
+
+    resultBox.innerText =
+        winnerText;
+}
+
+
+function renderPlayerList(info) {
+    const playerList =
+        document.getElementById("playerList");
+
+    if (!playerList) {
+        return;
+    }
+
+    playerList.innerHTML = "";
+
+    if (!info.players) {
+        return;
+    }
+
+    info.players.forEach(player => {
+        const div =
+            document.createElement("div");
+
+        let text =
+            player.name;
+
+        if (!player.alive) {
+            text += "（死亡）";
+        }
+
+        if (player.is_host) {
+            text += " [HOST]";
+        }
+
+        div.innerText = text;
+
+        playerList.appendChild(div);
+    });
+}
+
+
+function renderNightAction(info) {
+    const actionArea =
+        document.getElementById("actionArea");
+
+    const submittedText =
+        document.getElementById("submittedText");
+
+    if (!actionArea) {
+        return;
+    }
+
+    if (info.phase !== "NIGHT" ||
+        !info.alive ||
+        info.action_submitted) {
+
+        actionArea.style.display = "none";
+
+        if (submittedText) {
+            submittedText.style.display =
+                info.action_submitted
+                    ? "block"
+                    : "none";
+        }
+
+        return;
+    }
+
+    if (!info.can_act) {
+        actionArea.style.display = "none";
+
+        if (submittedText) {
+            submittedText.style.display = "none";
+        }
+
+        return;
+    }
+
+    if (submittedText) {
+        submittedText.style.display = "none";
+    }
+
+    buildRoleActionUI(info);
+}
+
+
+function updateGameState(info) {
+    renderRole(info);
+    renderPhase(info);
+    renderStatus(info);
+    renderPlayerList(info);
+    renderHostControls(info);
+    renderPrivateReports(info);
+    renderNightAction(info);
+    renderVoteArea(info);
+    renderResult(info);
+    renderResultActions(info);
+
+    if (info.phase === "DAY") {
+        resetDayUI();
+    }
+
+    if (info.room_code) {
+        document.getElementById("displayRoomCode").innerText =
+            info.room_code;
+    }
+
+    if (info.day_count !== undefined) {
+        const dayCount =
+            document.getElementById("dayCount");
+
+        if (dayCount) {
+            dayCount.innerText =
+                `Day ${info.day_count}`;
+        }
+    }
+}
+
+
+async function pollGameState() {
+    if (!currentRoomCode ||
+        !currentPlayerId) {
         return;
     }
 
@@ -538,113 +850,49 @@ async function updateGameState() {
                 currentPlayerId
             );
 
-        document.getElementById("phaseText").innerText =
-            `現在のフェーズ: ${info.phase} / ${info.day_count}日目`;
-
-        const roleName =
-            document.getElementById("roleName");
-
-        roleName.innerText =
-            `あなたの役職: ${info.displayed_role}`;
-
-        roleName.dataset.role =
-            info.displayed_role;
-
-        document.getElementById("statusText").innerText =
-            info.alive
-                ? "状態: 生存"
-                : "状態: 死亡";
-
-        const resultBox =
-            document.getElementById("resultBox");
-
-        if (info.message) {
-            resultBox.innerText =
-                info.message;
-
-            resultBox.style.display =
-                "block";
-        }
-
-        renderPrivateReports(info);
-
-        if (
-            info.is_host &&
-            info.phase === "SETUP"
-        ) {
-            document.getElementById(
-                "hostControls"
-            ).style.display = "block";
-        } else {
-            document.getElementById(
-                "hostControls"
-            ).style.display = "none";
-        }
-
-        resetDayUI();
-
-        if (
-            info.phase === "NIGHT" &&
-            info.alive &&
-            !info.action_submitted
-        ) {
-            buildRoleActionUI(info);
-
-            document.getElementById(
-                "actionArea"
-            ).style.display = "block";
-
-            document.getElementById(
-                "submittedText"
-            ).style.display = "none";
-
-        } else {
-            document.getElementById(
-                "actionArea"
-            ).style.display = "none";
-        }
-
-        if (info.phase === "DAY") {
-            renderVoteArea(info);
-        } else {
-            const voteArea =
-                document.getElementById("voteArea");
-
-            if (voteArea) {
-                voteArea.style.display = "none";
-            }
-        }
-
-        if (info.phase === "RESULT") {
-            const voteArea =
-                document.getElementById("voteArea");
-
-            if (voteArea) {
-                voteArea.style.display = "none";
-            }
-
-            document.getElementById(
-                "actionArea"
-            ).style.display = "none";
-        }
+        updateGameState(info);
 
     } catch (err) {
         console.error(err);
     }
 }
 
-window.onload = function() {
-    const savedCode =
+
+function startPolling() {
+    if (pollInterval) {
+        clearInterval(pollInterval);
+    }
+
+    pollGameState();
+
+    pollInterval =
+        setInterval(
+            pollGameState,
+            2000
+        );
+}
+
+
+function restoreSession() {
+    const savedRoomCode =
         localStorage.getItem("roomCode");
 
-    const savedPlayer =
+    const savedPlayerId =
         localStorage.getItem("playerId");
 
-    if (savedCode && savedPlayer) {
-        currentRoomCode = savedCode;
-        currentPlayerId = savedPlayer;
-
-        showGameScreen();
-        startPolling();
+    if (!savedRoomCode ||
+        !savedPlayerId) {
+        return;
     }
-};
+
+    currentRoomCode = savedRoomCode;
+    currentPlayerId = savedPlayerId;
+
+    showGameScreen();
+    startPolling();
+}
+
+
+document.addEventListener("DOMContentLoaded", () => {
+    restoreSession();
+});
