@@ -45,7 +45,6 @@ class Player:
         self.is_alive = True
         
         # 使用回数制限
-        "ねずみ": 1, "挑発者": 2, "ブレイマー": 2, "サバイバー": 3
         self.role_uses = 999
         
         # 状態フラグ
@@ -68,6 +67,7 @@ class Room:
         self.cleaned_players = set()             # クリーナー対象
         self.blamed_players = {}                 # ブレイマー対象 {player_id: fake_role}
         self.planted_bombs = set()               # ボマーが爆弾を掛けた相手
+        self.result_text = ""
 
 rooms: Dict[str, Room] = {}
 
@@ -166,6 +166,9 @@ def assign_roles_feign(players: List[Player]):
     innocent_indices = [i for i, r in enumerate(chosen_roles) if ROLES_INFO[r]["camp"] == "innocent" and ROLES_INFO[r]["can_be_fool"]]
     fool_index = random.choice(innocent_indices) if innocent_indices else -1
 
+    # 各役職の使用回数設定マッピング
+    uses_map = {"ねずみ": 1, "挑発者": 2, "ブレイマー": 2, "サバイバー": 3}
+
     for idx, player in enumerate(players):
         role_name = chosen_roles[idx]
         player.real_role = role_name
@@ -180,11 +183,8 @@ def assign_roles_feign(players: List[Player]):
         else:
             player.displayed_role = role_name
 
-        # 使用回数設定
-        if player.displayed_role == "ねずみ": player.role_uses = 1
-        elif player.displayed_role == "挑発者": player.role_uses = 2
-        elif player.displayed_role == "ブレイマー": player.role_uses = 2
-        elif player.displayed_role == "サバイバー": player.role_uses = 3
+        # 使用回数の割り当て
+        player.role_uses = uses_map.get(player.displayed_role, 999)
 
 # ---------------------------------------------------------
 # ステータス確認 API
