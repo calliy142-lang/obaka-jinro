@@ -71,11 +71,9 @@ class Room:
         self.phase = "SETUP"
         self.day_count = 1
         self.day_timer = 60
-        self.distribution_mode = "individual"
-        self.role_distribution = {role: 0 for role in ROLE_CONFIGS}
-        self.role_distribution["doctor"] = 1
-        self.role_distribution["police"] = 1
-        self.role_distribution["investigator"] = 1
+        self.distribution_mode = "unified"
+        # 統合配分では個別指定はバカのみ。
+        self.role_distribution = {"fool": 0}
         self.faction_distribution = {"innocent": 2, "imposter": 1, "neutral": 0}
 
         self.actions = {}
@@ -241,74 +239,92 @@ def assign_role(player, role):
             player["ability_uses_remaining"][ability] = uses
 
 
-def choose_roles_individual(room):
-    player_list = list(room.players.values())
-    random.shuffle(player_list)
+def choose_roles_unified(room):
+    """
+    統合版の役職配分。優先順位は以下。
+    1. 陣営人数を最優先で確定
+    2. バカの指定人数をイノセント枠へ優先配置
+    3. 残った枠は「0人指定」の役職から、その陣営の候補をランダム配置
 
-    selected = []
-
-    for role, count in room.role_distribution.items():
-        if count <= 0:
-            continue
-        selected.extend([role] * count)
-
-    if len(selected) < len(player_list):
-        remaining = len(player_list) - len(selected)
-        selected.extend(random.choices(list(ROLE_CONFIGS.keys()), k=remaining))
-
-    if len(selected) > len(player_list):
-        selected = selected[:len(player_list)]
-
-    # Avoid giving Fool a Provoker-looking result.
-    for idx, role in enumerate(selected):
-        if role == "fool":
-            pass
-
-    random.shuffle(selected)
-
-    for player, role in zip(player_list, selected):
-        assign_role(player, role)
-
-
-def choose_roles_faction(room):
+    インポスターは独立役職ではなく陣営なので、
+    インポスター枠には IMPOSTER_ELIGIBLE_INNOCENT_ROLES の役職を割り当てる。
+    ドクターとバカはインポスター枠には入らない。
+    """
     players = list(room.players.values())
     random.shuffle(players)
+    total = len(players)
 
-    factions = []
-    for camp, count in room.faction_distribution.items():
-        factions.extend([camp] * max(0, int(count)))
+    factions = {
+        "innocent": max(0, int(room.faction_distribution.get("innocent", 0))),
+        "imposter": max(0, int(room.faction_distribution.get("imposter", 0))),
+        "neutral": max(0, int(room.faction_distribution.get("neutral", 0))),
+    }
 
-    if len(factions) < len(players):
-        factions.extend(
-            random.choices(
-                ["innocent", "imposter", "neutral"],
-                k=len(players) - len(factions)
-            )
+    faction_total = sum(factions.values())
+    if faction_total != total:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"陣営人数の合計({faction_total}人)と参加人数({total}人)を一致させてください。"
+            ),
         )
 
-    if len(factions) > len(players):
-        factions = factions[:len(players)]
+    fool_count = max(0, int(room.role_distribution.get("fool", 0)))
+    if fool_count > factions["innocent"]:
+        raise HTTPException(
+            status_code=400,
+            detail="バカの人数はイノセント陣営の人数を超えられません。",
+        )
 
     role_pools = {
         "innocent": [
             "fool", "doctor", "mouse", "police", "trapper",
             "lookout", "investigator", "provoker", "tracker"
         ],
-        # インポスターは独立した役職ではなく陣営。
-        # 必ずイノセント系の対象役職を1つ持つ。
         "imposter": list(IMPOSTER_ELIGIBLE_INNOCENT_ROLES),
         "neutral": [
             "serial_killer", "bomber", "survivor", "thief",
             "ghost", "magician"
-        ]
+        ],
     }
 
-    for player, camp in zip(players, factions):
-        role = random.choice(role_pools[camp])
+    # まず陣営を確定する。
+    faction_list = []
+    for camp in ["innocent", "imposter", "neutral"]:
+        faction_list.extend([camp] * factions[camp])
+    random.shuffle(faction_list)
+
+    # 陣営ごとに役職を作る。
+    assigned_by_camp = {"innocent": [], "imposter": [], "neutral": []}
+
+    # 1) バカを最優先で固定。
+    assigned_by_camp["innocent"].extend(["fool"] * fool_count)
+
+    # 2) 残りは「0人指定」の役職からランダム。
+    # 現在、個別指定として意味を持つのはバカだけなので、
+    # バカを指定した場合は追加のバカをランダムで引かない。
+    for camp in ["innocent", "imposter", "neutral"]:
+        slots = factions[camp] - len(assigned_by_camp[camp])
+        pool = list(role_pools[camp])
+
+        if camp == "innocent" and fool_count > 0:
+            pool = [role for role in pool if role != "fool"]
+
+        if not pool and slots > 0:
+            raise HTTPException(status_code=400, detail=f"{camp}陣営に割り当て可能な役職がありません。")
+
+        assigned_by_camp[camp].extend(random.choices(pool, k=slots))
+        random.shuffle(assigned_by_camp[camp])
+
+    # シャッフル済みの陣営スロットへ、同じ陣営の役職を対応させる。
+    camp_positions = {"innocent": 0, "imposter": 0, "neutral": 0}
+    for player, camp in zip(players, faction_list):
+        idx = camp_positions[camp]
+        role = assigned_by_camp[camp][idx]
+        camp_positions[camp] += 1
         assign_role(player, role)
-        # Mouse is the flexible role.
-        if role == "mouse":
-            player["camp"] = camp
+        # ねずみは陣営によって所属陣営が変わる柔軟役職。
+        player["camp"] = camp
 
 
 def validate_target(room, player_id, target_id, allow_self=False):
@@ -1134,14 +1150,12 @@ async def update_settings(room_code: str, req: SettingsRequest):
         raise HTTPException(status_code=400, detail="ゲーム開始後は設定できません")
 
     room.day_timer = max(10, int(req.day_timer or 60))
-    room.distribution_mode = req.distribution_mode or "individual"
+    room.distribution_mode = "unified"
 
     if req.role_distribution is not None:
-        for role in ROLE_CONFIGS:
-            room.role_distribution[role] = max(
-                0,
-                int(req.role_distribution.get(role, 0))
-            )
+        room.role_distribution["fool"] = max(
+            0, int(req.role_distribution.get("fool", 0))
+        )
 
     if req.faction_distribution is not None:
         for camp in ["innocent", "imposter", "neutral"]:
@@ -1171,10 +1185,7 @@ async def start_game(room_code: str, req: StartRequest):
     if len(room.players) < 2:
         raise HTTPException(status_code=400, detail="2人以上必要です")
 
-    if room.distribution_mode == "faction":
-        choose_roles_faction(room)
-    else:
-        choose_roles_individual(room)
+    choose_roles_unified(room)
 
     room.phase = "NIGHT"
     room.day_count = 1
@@ -1264,6 +1275,7 @@ async def get_player_info(room_code: str, player_id: str):
         "phase": room.phase,
         "day_count": room.day_count,
         "day_timer": room.day_timer,
+        "player_count": len(room.players),
 
         "alive": player["alive"],
 

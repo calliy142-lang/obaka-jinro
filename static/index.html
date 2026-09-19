@@ -155,64 +155,36 @@
                 </label>
             </div>
 
-            <div style="display:flex;gap:10px;margin-bottom:15px;">
-                <button type="button" id="tabIndividual"
-                        onclick="switchMode('individual')"
-                        style="flex:1;padding:8px;background:#007bff;color:white;border:none;border-radius:4px;font-weight:bold;">
-                    個別役職モード
-                </button>
+            <div style="background:#f8f9fa;border:1px solid #ddd;border-radius:6px;padding:12px;margin-bottom:15px;">
+                <h4 style="margin:0 0 8px 0;">役職振り分け設定</h4>
+                <p style="margin:0 0 12px 0;font-size:0.9em;color:#555;line-height:1.5;">
+                    優先順位は <b>①陣営人数 → ②バカ人数 → ③残りを0人指定の役職からランダム</b> です。<br>
+                    インポスターは独立した役職ではなく陣営です。インポスター陣営には、ドクター・バカ以外のイノセント系役職がランダムで割り当てられます。
+                </p>
 
-                <button type="button" id="tabFaction"
-                        onclick="switchMode('faction')"
-                        style="flex:1;padding:8px;background:#e0e0e0;color:#333;border:none;border-radius:4px;font-weight:bold;">
-                    陣営比率モード
-                </button>
-            </div>
-
-            <div id="individualSection">
-                <h4>役職別人数配分</h4>
-
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
-                    <label>バカ <input type="number" class="role-input" data-role="fool" value="0" min="0"></label>
-                    <label>ドクター <input type="number" class="role-input" data-role="doctor" value="1" min="0"></label>
-                    <label>ねずみ <input type="number" class="role-input" data-role="mouse" value="0" min="0"></label>
-                    <label>ポリス <input type="number" class="role-input" data-role="police" value="1" min="0"></label>
-                    <label>トラッパー <input type="number" class="role-input" data-role="trapper" value="0" min="0"></label>
-                    <label>ルックアウト <input type="number" class="role-input" data-role="lookout" value="0" min="0"></label>
-                    <label>インベスティ <input type="number" class="role-input" data-role="investigator" value="1" min="0"></label>
-                    <label>挑発者 <input type="number" class="role-input" data-role="provoker" value="0" min="0"></label>
-                    <label>トラッカー <input type="number" class="role-input" data-role="tracker" value="0" min="0"></label>
-
-                    <label style="color:#d9534f;">ブレイマー <input type="number" class="role-input" data-role="blaimer" value="0" min="0"></label>
-                    <label style="color:#d9534f;">クリーナー <input type="number" class="role-input" data-role="cleaner" value="0" min="0"></label>
-
-                    <label style="color:#6c757d;">シリアルK <input type="number" class="role-input" data-role="serial_killer" value="0" min="0"></label>
-                    <label style="color:#6c757d;">ボマー <input type="number" class="role-input" data-role="bomber" value="0" min="0"></label>
-                    <label style="color:#6c757d;">サバイバー <input type="number" class="role-input" data-role="survivor" value="0" min="0"></label>
-                    <label style="color:#6c757d;">シーフ <input type="number" class="role-input" data-role="thief" value="0" min="0"></label>
-                    <label style="color:#6c757d;">ゴースト <input type="number" class="role-input" data-role="ghost" value="0" min="0"></label>
-                    <label style="color:#6c757d;">魔術師 <input type="number" class="role-input" data-role="magician" value="0" min="0"></label>
+                <div style="margin-bottom:12px;font-weight:bold;">
+                    参加人数: <span id="hostPlayerCount">-</span>人
                 </div>
-            </div>
 
-            <div id="factionSection" style="display:none;">
-                <h4>陣営比率人数配分</h4>
-
-                <div style="display:flex;flex-direction:column;gap:10px;">
-                    <label>
-                        イノセント:
-                        <input type="number" id="factionInnocent" value="2" min="0">
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:15px;">
+                    <label>イノセント
+                        <input type="number" id="factionInnocent" value="2" min="0" style="width:60px;">人
                     </label>
-
-                    <label style="color:#d9534f;font-weight:bold;">
-                        インポスター:
-                        <input type="number" id="factionImposter" value="1" min="0">
+                    <label style="color:#d9534f;font-weight:bold;">インポスター
+                        <input type="number" id="factionImposter" value="1" min="0" style="width:60px;">人
                     </label>
-
-                    <label style="color:#6c757d;font-weight:bold;">
-                        第三陣営:
-                        <input type="number" id="factionNeutral" value="0" min="0">
+                    <label style="color:#6c757d;font-weight:bold;">第三陣営
+                        <input type="number" id="factionNeutral" value="0" min="0" style="width:60px;">人
                     </label>
+                </div>
+
+                <div style="border-top:1px solid #ddd;padding-top:12px;">
+                    <label style="font-weight:bold;">バカ（個別指定）
+                        <input type="number" class="role-input" data-role="fool" value="0" min="0" style="width:60px;">人
+                    </label>
+                    <p style="margin:6px 0 0 0;font-size:0.85em;color:#666;">
+                        指定した人数のバカを、イノセント陣営の枠へ最優先で配置します。残りは0人指定の役職からランダムです。
+                    </p>
                 </div>
             </div>
 
