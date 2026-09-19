@@ -16,13 +16,20 @@
             <hr style="margin: 20px 0;">
             <input type="text" id="roomCodeInput" placeholder="部屋コード (例: ABCD)" style="padding: 8px; font-size: 1em; width: 50%; margin-right: 8px;">
             <button onclick="handleJoinRoom()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">部屋に参加する</button>
+            
+            <div style="margin-top: 20px;">
+                <button onclick="toggleRoleGuide()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">📖 役職一覧・ルール説明を見る</button>
+            </div>
         </div>
 
         <!-- ゲーム画面 -->
         <div id="gamePanel" style="display:none;">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 10px;">
                 <h2 style="margin: 0;">部屋コード: <span id="displayRoomCode" style="color: #007bff;"></span></h2>
-                <button onclick="leaveRoom()" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">部屋から出る</button>
+                <div>
+                    <button onclick="toggleRoleGuide()" style="background: #6c757d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-right: 8px;">📖 役職一覧・ルール</button>
+                    <button onclick="leaveRoom()" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">部屋から出る</button>
+                </div>
             </div>
             
             <div id="phaseText" style="font-weight: bold; color: #333; margin-bottom: 5px;"></div>
@@ -45,11 +52,10 @@
                     <button type="button" id="tabFaction" onclick="switchMode('faction')" style="flex: 1; padding: 8px; background: #e0e0e0; color: #333; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">陣営比率モード</button>
                 </div>
                 
-                <!-- 1. 個別役職設定エリア -->
+                <!-- 1. 個別役職設定エリア（全17役職） -->
                 <div id="individualSection">
                     <h4 style="margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">役職別人数配分（個別に指定）</h4>
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
-                        <!-- イノセント陣営 -->
                         <label style="font-size: 0.9em;">バカ: <input type="number" class="role-input" data-role="fool" value="0" min="0" style="width: 40px;"></label>
                         <label style="font-size: 0.9em;">ドクター: <input type="number" class="role-input" data-role="doctor" value="1" min="0" style="width: 40px;"></label>
                         <label style="font-size: 0.9em;">ねずみ: <input type="number" class="role-input" data-role="mouse" value="0" min="0" style="width: 40px;"></label>
@@ -60,12 +66,10 @@
                         <label style="font-size: 0.9em;">挑発者: <input type="number" class="role-input" data-role="provoker" value="0" min="0" style="width: 40px;"></label>
                         <label style="font-size: 0.9em;">トラッカー: <input type="number" class="role-input" data-role="tracker" value="0" min="0" style="width: 40px;"></label>
                         
-                        <!-- インポスター陣営 -->
                         <label style="font-size: 0.9em; color: #d9534f; font-weight: bold;">インポスター: <input type="number" class="role-input" data-role="imposter" value="1" min="0" style="width: 40px;"></label>
                         <label style="font-size: 0.9em; color: #d9534f;">ブレイマー: <input type="number" class="role-input" data-role="blaimer" value="0" min="0" style="width: 40px;"></label>
                         <label style="font-size: 0.9em; color: #d9534f;">クリーナー: <input type="number" class="role-input" data-role="cleaner" value="0" min="0" style="width: 40px;"></label>
                         
-                        <!-- 第三陣営 -->
                         <label style="font-size: 0.9em; color: #6c757d;">シリアルK: <input type="number" class="role-input" data-role="serial_killer" value="0" min="0" style="width: 40px;"></label>
                         <label style="font-size: 0.9em; color: #6c757d;">ボマー: <input type="number" class="role-input" data-role="bomber" value="0" min="0" style="width: 40px;"></label>
                         <label style="font-size: 0.9em; color: #6c757d;">サバイバー: <input type="number" class="role-input" data-role="survivor" value="0" min="0" style="width: 40px;"></label>
@@ -77,7 +81,7 @@
 
                 <!-- 2. 陣営比率設定エリア -->
                 <div id="factionSection" style="display: none;">
-                    <h4 style="margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">陣営比率人数配分（陣営ごとに人数を指定してランダム割当）</h4>
+                    <h4 style="margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">陣営比率人数配分（陣営ごとに人数を指定）</h4>
                     <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;">
                         <label style="font-size: 0.95em;">イノセント陣営の人数: <input type="number" id="factionInnocent" value="2" min="0" style="width: 60px; padding: 4px;"></label>
                         <label style="font-size: 0.95em; color: #d9534f; font-weight: bold;">インポスター陣営の人数: <input type="number" id="factionImposter" value="1" min="0" style="width: 60px; padding: 4px;"></label>
@@ -95,6 +99,46 @@
             </div>
             <div id="submittedText" style="color: green; font-weight: bold; margin-top: 10px; display:none;">アクションを受け付けました。他のプレイヤーを待っています...</div>
         </div>
+
+        <!-- 役職一覧・ルール説明モーダル/パネル -->
+        <div id="roleGuidePanel" style="display: none; margin-top: 20px; background: #fff; border: 2px solid #6c757d; border-radius: 8px; padding: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-bottom: 12px;">
+                <h3 style="margin: 0; color: #333;">📖 全17役職 ルール説明＆勝利条件</h3>
+                <button onclick="toggleRoleGuide()" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">閉じる</button>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto; font-size: 0.9em; line-height: 1.5; text-align: left;">
+                <h4 style="color: #007bff; margin: 10px 0 5px 0;">【イノセント陣営】（勝利条件：インポスター・第三陣営を全員排除する）</h4>
+                <ul>
+                    <li><b>バカ</b>：特に特殊能力を持たない市民。議論と推理で村を救う。</li>
+                    <li><b>ドクター</b>：夜にプレイヤーを1人選び、インポスターの襲撃から守ることができる。</li>
+                    <li><b>ねずみ</b>：こっそり他の人の行動を覗き見できるかもしれない役割。</li>
+                    <li><b>ポリス</b>：夜に怪しい人を調査し、インポスターかどうかを知ることができる。</li>
+                    <li><b>トラッパー</b>：特定の場所に罠を仕掛け、訪れた人を捕らえたり行動を制限できる。</li>
+                    <li><b>ルックアウト</b>：夜に誰が誰のところへ行ったかを観察（見張り）できる。</li>
+                    <li><b>インベスティ（調査官）</b>：対象のプレイヤーを調査し、詳細な手がかりを得る。</li>
+                    <li><b>挑発者</b>：自分に注意を引きつけて、仲間の盾になる役割。</li>
+                    <li><b>トラッカー</b>：対象のプレイヤーが夜に誰を追跡したか、移動先を突き止める。</li>
+                </ul>
+
+                <h4 style="color: #d9534f; margin: 15px 0 5px 0;">【インポスター陣営】（勝利条件：イノセント陣営と同数以下まで減らす）</h4>
+                <ul>
+                    <li><b>インポスター</b>：夜に市民を襲撃して排除していく、ゲームの主役級役職。</li>
+                    <li><b>ブレイマー</b>：罪を誰かに擦り付けたり、ミスを誘導する能力を持つ。</li>
+                    <li><b>クリーナー</b>：襲撃した後の証拠や死体の痕跡をきれいに消し去る。</li>
+                </ul>
+
+                <h4 style="color: #6c757d; margin: 15px 0 5px 0;">【第三陣営】（勝利条件：固有の条件を満たして単独勝利する）</h4>
+                <ul>
+                    <li><b>シリアルK</b>：独自の目的のために、市民もインポスターも関係なく連続で排除を狙う。</li>
+                    <li><b>ボマー</b>：仕掛けた爆弾を爆発させて、周囲の人間ごと吹き飛ばす。</li>
+                    <li><b>サバイバー</b>：ゲーム終了時まで生き残る事だけが目的の個人プレイヤー。</li>
+                    <li><b>シーフ</b>：他人の役割やアイテムを盗み出し、自分の利益に変える。</li>
+                    <li><b>ゴースト</b>：すでに起きた事件の影で暗躍する、幽霊のような存在。</li>
+                    <li><b>魔術師</b>：トリッキーな魔法を使って周囲を混乱させ、独自の勝利を狙う。</li>
+                </ul>
+            </div>
+        </div>
+
     </div>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/app.js"></script>

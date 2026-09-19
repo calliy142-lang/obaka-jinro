@@ -27,6 +27,16 @@ function switchMode(mode) {
     }
 }
 
+// 役職ルール説明パネルの開閉トグル
+function toggleRoleGuide() {
+    const guidePanel = document.getElementById("roleGuidePanel");
+    if (guidePanel.style.display === "none" || guidePanel.style.display === "") {
+        guidePanel.style.display = "block";
+    } else {
+        guidePanel.style.display = "none";
+    }
+}
+
 async function handleCreateRoom() {
     const name = document.getElementById("usernameInput").value.trim();
     if (!name) {
@@ -86,6 +96,7 @@ function leaveRoom() {
     document.getElementById("gamePanel").style.display = "none";
     document.getElementById("lobbyPanel").style.display = "block";
     document.getElementById("resultBox").style.display = "none";
+    document.getElementById("roleGuidePanel").style.display = "none";
 }
 
 async function handleStartGame() {
