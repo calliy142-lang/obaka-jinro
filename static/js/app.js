@@ -190,7 +190,7 @@ function updateNightUI(data) {
 
 function updateDayUI(data) {
     const reportEl = document.getElementById('night-report-box');
-    if (reportEl) reportEl.innerHTML = data.night_report || "昨夜は何も起こりませんでした。";
+    if (reportEl) reportEl.innerHTML = data.night_report || "昨夜は特に報告はありませんでした。";
 
     const selectEl = document.getElementById('vote-target-select');
     if (selectEl) {

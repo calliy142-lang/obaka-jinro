@@ -48,6 +48,7 @@ class Room:
         self.night_actions: Dict[str, dict] = {}
         self.votes: Dict[str, str] = {}
         self.night_reports: Dict[str, List[str]] = {}
+        self.last_vote_result = ""
         self.result_text = ""
 
 rooms: Dict[str, Room] = {}
@@ -160,7 +161,10 @@ def get_player_info(room_code: str, player_id: str):
     other_p = [p for p in all_p if p["id"] != player_id and p["is_alive"]]
 
     reports = room.night_reports.get(player_id, [])
-    night_report_text = "<br>".join(reports) if reports else ""
+    if room.last_vote_result:
+        reports = [f"【前回の追放結果】 {room.last_vote_result}"] + reports
+
+    night_report_text = "<br>".join(reports) if reports else "特に報告はありません。"
 
     return {
         "phase": room.phase,
@@ -238,9 +242,9 @@ def resolve_night_phase(room: Room):
         elif p.displayed_role == "インベスティゲーター":
             if target:
                 if p.is_fool:
-                    room.night_reports[p_id].append(f"{target.name} は 「ドクター」 または 「ブレイマー」 のどちらかです。")
+                    room.night_reports[p_id].append(f"調査結果: {target.name} は 「ドクター」 または 「ブレイマー」 のどちらかです。")
                 else:
-                    room.night_reports[p_id].append(f"{target.name} は 「{target.real_role}」 または 「ブレイマー」 のどちらかです。")
+                    room.night_reports[p_id].append(f"調査結果: {target.name} は 「{target.real_role}」 または 「ブレイマー」 のどちらかです。")
 
         elif p.real_role == "シリアルキラー" and target:
             kills.add(target_id)
@@ -257,7 +261,7 @@ def resolve_night_phase(room: Room):
         players[k_id].is_alive = False
         room.night_reports[k_id].append("あなたは昨夜キルされました。")
 
-    room.phase = "vote"  # 昼の議論・投票フェーズへ
+    room.phase = "vote"
     room.night_actions.clear()
     check_win_conditions(room)
 
@@ -285,9 +289,9 @@ def resolve_vote_phase(room: Room):
         executed_id = max(counts, key=counts.get)
         room.players[executed_id].is_alive = False
         executed_player = room.players[executed_id]
-        room.result_text = f"投票により {executed_player.name} が追放されました。"
+        room.last_vote_result = f"{executed_player.name} が追放されました。"
     else:
-        room.result_text = "誰も追放されませんでした。"
+        room.last_vote_result = "誰も追放されませんでした。"
 
     game_over = check_win_conditions(room)
 
@@ -296,7 +300,6 @@ def resolve_vote_phase(room: Room):
         room.day_count += 1
         room.night_actions.clear()
         room.votes.clear()
-        room.night_reports = {p_id: [room.result_text] for p_id in room.players}
 
 def check_win_conditions(room: Room) -> bool:
     alive = [p for p in room.players.values() if p.is_alive]
