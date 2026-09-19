@@ -18,12 +18,10 @@ def generate_random_code(length=4) -> str:
 
 @router.post("/create")
 async def create_room():
-    # 重複しない4文字の部屋コードを生成
     code = generate_random_code()
     while room_manager.get_room(code):
         code = generate_random_code()
 
-    # ダミーのhost_idで部屋を作成（最初のプレイヤー参加時に決定）
     room = room_manager.create_room(code=code, host_id="")
     return {"room_code": code}
 
@@ -31,20 +29,18 @@ async def create_room():
 async def join_room(room_code: str, req: JoinRoomReq):
     room = room_manager.get_room(room_code)
     if not room:
-        # 万が一部屋が存在しない場合はそのコードで新規作成
         room = room_manager.create_room(code=room_code, host_id="")
 
     p_id = str(uuid.uuid4())[:8]
-    is_host = len(room.players) == 0
+    is_host = (len(room.players) == 0)
 
-    # 最初の参加者をホストに設定
     if is_host:
         room.host_id = p_id
 
     player = Player(id=p_id, name=req.player_name, is_host=is_host)
     room.players[p_id] = player
 
-    return {"room_code": room_code, "player_id": p_id}
+    return {"room_code": room.room_code, "player_id": p_id}
 
 @router.get("/{room_code}/player/{player_id}")
 async def get_player_info(room_code: str, player_id: str):
