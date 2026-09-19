@@ -2,66 +2,68 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>おバカ人狼 - 完全実装版</title>
+    <title>おバカ人狼</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>おバカ人狼 カスタム</h1>
+    <div class="container" style="max-width: 600px; margin: 20px auto; font-family: sans-serif; padding: 20px;">
+        <h1 style="text-align: center;">おバカ人狼</h1>
 
         <!-- ロビー画面 -->
-        <div id="lobbyPanel">
-            <input type="text" id="usernameInput" placeholder="プレイヤー名を入力">
-            <br>
-            <button onclick="handleCreateRoom()">部屋を作成する</button>
-            <hr>
-            <input type="text" id="roomCodeInput" placeholder="部屋コード (例: ABCD)">
-            <button onclick="handleJoinRoom()">部屋に参加する</button>
+        <div id="lobbyPanel" style="text-align: center;">
+            <input type="text" id="usernameInput" placeholder="プレイヤー名を入力" style="padding: 8px; font-size: 1em; width: 80%; margin-bottom: 10px;"><br>
+            <button onclick="handleCreateRoom()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">部屋を作成する</button>
+            <hr style="margin: 20px 0;">
+            <input type="text" id="roomCodeInput" placeholder="部屋コード (例: ABCD)" style="padding: 8px; font-size: 1em; width: 50%; margin-right: 8px;">
+            <button onclick="handleJoinRoom()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">部屋に参加する</button>
         </div>
 
         <!-- ゲーム画面 -->
         <div id="gamePanel" style="display:none;">
-            <h2>部屋コード: <span id="displayRoomCode"></span></h2>
-            <div id="phaseText" style="font-weight: bold; color: #333;"></div>
-            <div id="roleName" style="font-size: 1.2em; color: #007bff;"></div>
-            <div id="statusText"></div>
+            <h2>部屋コード: <span id="displayRoomCode" style="color: #007bff;"></span></h2>
+            <div id="phaseText" style="font-weight: bold; color: #333; margin-bottom: 5px;"></div>
+            <div id="roleName" style="font-size: 1.2em; color: #007bff; margin-bottom: 5px;"></div>
+            <div id="statusText" style="margin-bottom: 10px;"></div>
 
             <!-- 結果メッセージ -->
-            <div id="resultBox" style="background: #f8f9fa; border: 1px solid #ccc; padding: 10px; margin-top: 10px; display:none;"></div>
+            <div id="resultBox" style="background: #f8f9fa; border: 1px solid #ccc; padding: 10px; border-radius: 4px; margin-bottom: 15px; display:none;"></div>
 
-            <!-- ホスト専用設定（17役職カスタム＆昼タイマー設定） -->
-            <div id="hostControls" style="display:none; border: 2px dashed #007bff; padding: 15px; margin-top: 15px;">
-                <h3>ホストルーム設定（全17役職自由カスタム）</h3>
-                <label>昼の制限時間（秒）: <input type="number" id="dayTimerInput" value="60" min="10" max="300"></label>
-                <div style="margin-top: 10px;">
-                    <h4>役職別人数配分</h4>
-                    <label>バカ: <input type="number" class="role-input" data-role="fool" value="0" min="0"></label>
-                    <label>ドクター: <input type="number" class="role-input" data-role="doctor" value="1" min="0"></label>
-                    <label>ねずみ: <input type="number" class="role-input" data-role="mouse" value="0" min="0"></label>
-                    <label>ポリス: <input type="number" class="role-input" data-role="police" value="1" min="0"></label>
-                    <label>トラッパー: <input type="number" class="role-input" data-role="trapper" value="0" min="0"></label>
-                    <label>ルックアウト: <input type="number" class="role-input" data-role="lookout" value="0" min="0"></label>
-                    <label>インベスティゲーター: <input type="number" class="role-input" data-role="investigator" value="1" min="0"></label>
-                    <label>挑発者: <input type="number" class="role-input" data-role="provoker" value="0" min="0"></label>
-                    <label>トラッカー: <input type="number" class="role-input" data-role="tracker" value="0" min="0"></label>
-                    <label>インポスター: <input type="number" class="role-input" data-role="imposter" value="1" min="0"></label>
-                    <label>ブレイマー: <input type="number" class="role-input" data-role="blaimer" value="0" min="0"></label>
-                    <label>クリーナー: <input type="number" class="role-input" data-role="cleaner" value="0" min="0"></label>
-                    <label>シリアルキラー: <input type="number" class="role-input" data-role="serial_killer" value="0" min="0"></label>
-                    <label>ボマー: <input type="number" class="role-input" data-role="bomber" value="0" min="0"></label>
-                    <label>サバイバー: <input type="number" class="role-input" data-role="survivor" value="0" min="0"></label>
-                    <label>シーフ: <input type="number" class="role-input" data-role="thief" value="0" min="0"></label>
-                    <label>ゴースト: <input type="number" class="role-input" data-role="ghost" value="0" min="0"></label>
-                    <label>魔術師: <input type="number" class="role-input" data-role="magician" value="0" min="0"></label>
+            <!-- ホスト専用設定（グリッドレイアウト） -->
+            <div id="hostControls" style="display:none; border: 2px solid #007bff; border-radius: 8px; padding: 15px; margin-top: 15px; background: #fff;">
+                <h3 style="margin-top: 0; color: #007bff;">ホストルーム設定</h3>
+                <div style="margin-bottom: 15px;">
+                    <label>昼の制限時間（秒）: <input type="number" id="dayTimerInput" value="60" min="10" max="300" style="width: 80px; padding: 4px;"></label>
                 </div>
-                <br>
-                <button onclick="handleStartGame()" style="background: #28a745; color: white; padding: 10px 20px; font-size: 1em;">ゲームスタート</button>
+                
+                <h4 style="margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">役職別人数配分（固定数・残りはランダム）</h4>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px;">
+                    <label style="font-size: 0.9em;">バカ: <input type="number" class="role-input" data-role="fool" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">ドクター: <input type="number" class="role-input" data-role="doctor" value="1" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">ねずみ: <input type="number" class="role-input" data-role="mouse" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">ポリス: <input type="number" class="role-input" data-role="police" value="1" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">トラッパー: <input type="number" class="role-input" data-role="trapper" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">ルックアウト: <input type="number" class="role-input" data-role="lookout" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">インベスティ: <input type="number" class="role-input" data-role="investigator" value="1" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">挑発者: <input type="number" class="role-input" data-role="provoker" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">トラッカー: <input type="number" class="role-input" data-role="tracker" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">インポスター: <input type="number" class="role-input" data-role="imposter" value="1" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">ブレイマー: <input type="number" class="role-input" data-role="blaimer" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">クリーナー: <input type="number" class="role-input" data-role="cleaner" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">シリアルK: <input type="number" class="role-input" data-role="serial_killer" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">ボマー: <input type="number" class="role-input" data-role="bomber" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">サバイバー: <input type="number" class="role-input" data-role="survivor" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">シーフ: <input type="number" class="role-input" data-role="thief" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">ゴースト: <input type="number" class="role-input" data-role="ghost" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em;">魔術師: <input type="number" class="role-input" data-role="magician" value="0" min="0" style="width: 40px;"></label>
+                </div>
+                
+                <button onclick="handleStartGame()" style="background: #28a745; color: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 4px; cursor: pointer; width: 100%;">ゲームスタート</button>
             </div>
 
-            <!-- アクション・投票エリア（パス選択肢対応） -->
+            <!-- アクション・投票エリア -->
             <div id="actionArea" style="margin-top: 20px; display:none;">
-                <select id="targetSelect"></select>
-                <button id="actionBtn" onclick="handleActionSubmit()">実行する</button>
+                <select id="targetSelect" style="padding: 6px; margin-right: 8px;"></select>
+                <button id="actionBtn" onclick="handleActionSubmit()" style="padding: 6px 14px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">実行する</button>
             </div>
             <div id="submittedText" style="color: green; font-weight: bold; margin-top: 10px; display:none;">アクション・投票を受け付けました。他のプレイヤーを待っています...</div>
         </div>

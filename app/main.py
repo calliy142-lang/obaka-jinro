@@ -108,14 +108,25 @@ def start_game(room_code: str, data: dict):
     if room.host_id != data.get("host_player_id"):
         raise HTTPException(status_code=403, detail="ホストのみ開始できます")
     
+    player_ids = list(room.players.keys())
+    total_players = len(player_ids)
+    
+    # 1. ユーザーが設定画面で指定した数を優先的に組み込む
     assigned_roles = []
     for role, count in room.role_distribution.items():
-        assigned_roles.extend([role] * int(count))
+        try:
+            cnt = int(count)
+        except (ValueError, TypeError):
+            cnt = 0
+        assigned_roles.extend([role] * cnt)
     
-    player_ids = list(room.players.keys())
-    while len(assigned_roles) < len(player_ids):
-        assigned_roles.append("imposter")
-    assigned_roles = assigned_roles[:len(player_ids)]
+    # 2. プレイヤー数に足りない分を全17役職の中からランダムに補う
+    all_role_keys = list(ROLE_CONFIGS.keys())
+    while len(assigned_roles) < total_players:
+        assigned_roles.append(random.choice(all_role_keys))
+        
+    # 3. 指定数が多すぎてプレイヤー数を超えていたら調整
+    assigned_roles = assigned_roles[:total_players]
 
     random.shuffle(assigned_roles)
     for idx, pid in enumerate(player_ids):

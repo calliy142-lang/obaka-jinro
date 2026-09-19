@@ -12,7 +12,7 @@ const API = {
         const res = await fetch(`/api/room/${roomCode}/join`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: playerName }) // ← player_name から name に修正
+            body: JSON.stringify({ name: playerName })
         });
         if (!res.ok) throw new Error("部屋への参加に失敗しました");
         return await res.json();
