@@ -23,7 +23,7 @@ async def create_room():
         code = generate_random_code()
 
     room = room_manager.create_room(code=code, host_id="")
-    return {"room_code": code}
+    return {"room_code": room.room_code}
 
 @router.post("/{room_code}/join")
 async def join_room(room_code: str, req: JoinRoomReq):

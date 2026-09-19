@@ -10,20 +10,19 @@ ROLE_TABLES = {
     6: ["IMPOSTER", "SERIAL_KILLER", "DOCTOR", "POLICE", "CITIZEN", "CITIZEN"]
 }
 
-# 偽装（見た目）用役職リスト
 DISGUISED_ROLES = ["DOCTOR", "POLICE", "CITIZEN", "INVESTIGATOR", "TRAPPER"]
 
 class Player(BaseModel):
     id: str
     name: str
-    role: Optional[str] = None           # 本来の役職
-    displayed_role: Optional[str] = None # 見た目の役職
+    role: Optional[str] = None
+    displayed_role: Optional[str] = None
     is_alive: bool = True
     is_host: bool = False
 
 class Room(BaseModel):
     room_code: str
-    host_id: str
+    host_id: str = ""
     players: Dict[str, Player] = {}
     phase: str = "SETUP"
 
@@ -58,10 +57,9 @@ class RoomManager:
     def get_room(self, code: str) -> Optional[Room]:
         return self.rooms.get(code)
 
-    def create_room(self, code: str, host_id: str) -> Room:
+    def create_room(self, code: str, host_id: str = "") -> Room:
         room = Room(room_code=code, host_id=host_id)
         self.rooms[code] = room
         return room
 
-# 他のモジュールから参照されるシングルトンインスタンス
 room_manager = RoomManager()
