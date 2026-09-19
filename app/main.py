@@ -112,6 +112,7 @@ class StartRequest(BaseModel):
 class ActionRequest(BaseModel):
     player_id: str
     target_id: Optional[str] = None
+    attack_target_id: Optional[str] = None
     guessed_role: Optional[str] = None
     bomb_action: Optional[str] = None
 
@@ -543,6 +544,13 @@ def resolve_night(room):
             record_visit(room, actor, target_id)
             visitors_by_house.setdefault(target_id, []).append(actor)
 
+        # インポスターの襲撃も訪問として扱う。
+        # 役職能力とは別枠なので、役職能力の対象と襲撃対象が別でも記録する。
+        attack_target_id = action.get("attack_target_id")
+        if get_camp(actor) == "imposter" and attack_target_id and attack_target_id != "pass":
+            record_visit(room, actor, attack_target_id)
+            visitors_by_house.setdefault(attack_target_id, []).append(actor)
+
     # 2) Police blocks.
     for pid, action in actions.items():
         actor = room.players.get(pid)
@@ -810,6 +818,21 @@ def resolve_night(room):
                     "attacker": actor,
                     "target": target,
                     "cause": "thief",
+                    "doctor_savable": True
+                })
+
+        # インポスター陣営は、持っている役職とは別に夜の襲撃を選べる。
+        # ポリス／トラッパーで行動不能になった場合は襲撃も失敗する。
+        if get_camp(actor) == "imposter":
+            if pid in blocked_by_police or pid in trapped_actor_ids:
+                continue
+
+            attack_target = room.players.get(action.get("attack_target_id"))
+            if attack_target and attack_target["alive"]:
+                attacks.append({
+                    "attacker": actor,
+                    "target": attack_target,
+                    "cause": "imposter",
                     "doctor_savable": True
                 })
 
@@ -1354,6 +1377,8 @@ async def get_player_info(room_code: str, player_id: str):
         "camp_name": camp_name(get_camp(player)) if room.phase != "SETUP" else None,
 
         "targets": targets,
+        "is_imposter": get_camp(player) == "imposter" if room.phase != "SETUP" else False,
+        "attack_targets": ([{"id": p["id"], "name": p["name"]} for p in alive_players(room) if p["id"] != player_id] if room.phase == "NIGHT" and get_camp(player) == "imposter" else []),
 
         "action_submitted": player_id in room.actions,
         "vote_submitted": player_id in room.votes,
@@ -1396,6 +1421,7 @@ async def send_action(room_code: str, req: ActionRequest):
 
     action = {
         "target_id": req.target_id,
+        "attack_target_id": req.attack_target_id,
         "guessed_role": req.guessed_role,
         "bomb_action": req.bomb_action,
     }
@@ -1415,6 +1441,12 @@ async def send_action(room_code: str, req: ActionRequest):
             req.target_id,
             allow_self=(role == "bomber")
         )
+
+    # インポスター襲撃は役職能力とは別の入力として検証する。
+    attack_is_pass = req.attack_target_id in (None, "", "pass")
+    attack_target = None
+    if get_camp(player) == "imposter" and not attack_is_pass:
+        attack_target = validate_target(room, req.player_id, req.attack_target_id)
 
     # Fool has no real ability.
     if player["role"] == "fool":

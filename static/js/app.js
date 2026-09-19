@@ -2,6 +2,8 @@ let currentRoomCode = null;
 let currentPlayerId = null;
 let pollInterval = null;
 let currentDistMode = "individual";
+let selectedNightTarget = "pass";
+let selectedAttackTarget = "pass";
 
 function switchMode(mode) {
     // 旧UIとの互換用。現在は陣営＋個別役職を同時に設定します。
@@ -109,21 +111,45 @@ const MAGICIAN_GUESS_ROLES = [
 function buildRoleActionUI(info) {
     const actionRoleText = document.getElementById("actionRoleText");
     const targetSelect = document.getElementById("targetSelect");
+    const attackArea = document.getElementById("imposterAttackArea");
+    const attackSelect = document.getElementById("attackTargetSelect");
     const extraArea = document.getElementById("extraActionArea");
     const actionHelp = document.getElementById("actionHelp");
     actionRoleText.innerText = `${info.displayed_role} の夜アクション`;
-    // 2秒ごとのポーリングでUIを再構築しても、現在選択中の対象を維持する。
-    const previousTarget = targetSelect.value;
+
+    // ポーリングのたびにselectを再生成しても、ユーザーが選んだ値を
+    // 「何もしない」に勝手に戻さない。DOMのvalueだけに依存せず保持する。
+    if (targetSelect.value && info.targets.some(t => t.id === targetSelect.value)) {
+        selectedNightTarget = targetSelect.value;
+    }
     targetSelect.innerHTML = "";
     info.targets.forEach(t => {
         const opt = document.createElement("option"); opt.value = t.id; opt.innerText = t.name;
         targetSelect.appendChild(opt);
     });
-    if (previousTarget && info.targets.some(t => t.id === previousTarget)) {
-        targetSelect.value = previousTarget;
-    } else if (info.targets.some(t => t.id === "pass")) {
-        targetSelect.value = "pass";
+    targetSelect.value = info.targets.some(t => t.id === selectedNightTarget) ? selectedNightTarget : "pass";
+    targetSelect.onchange = () => { selectedNightTarget = targetSelect.value; };
+
+    // インポスター陣営だけ、役職能力とは別に襲撃対象を選択できる。
+    if (attackArea && attackSelect) {
+        if (info.is_imposter) {
+            attackArea.style.display = "block";
+            if (attackSelect.value && info.attack_targets.some(t => t.id === attackSelect.value)) {
+                selectedAttackTarget = attackSelect.value;
+            }
+            attackSelect.innerHTML = "";
+            const pass = document.createElement("option"); pass.value = "pass"; pass.innerText = "襲撃しない"; attackSelect.appendChild(pass);
+            info.attack_targets.forEach(t => {
+                const opt = document.createElement("option"); opt.value = t.id; opt.innerText = t.name;
+                attackSelect.appendChild(opt);
+            });
+            attackSelect.value = info.attack_targets.some(t => t.id === selectedAttackTarget) ? selectedAttackTarget : "pass";
+            attackSelect.onchange = () => { selectedAttackTarget = attackSelect.value; };
+        } else {
+            attackArea.style.display = "none";
+        }
     }
+
     extraArea.innerHTML = ""; actionHelp.innerText = "";
     const role = info.displayed_role;
 
@@ -165,15 +191,27 @@ function buildRoleActionUI(info) {
 }
 
 async function handleActionSubmit() {
-    const action = { target_id: document.getElementById("targetSelect").value };
+    const action = {
+        target_id: document.getElementById("targetSelect").value,
+        attack_target_id: selectedAttackTarget
+    };
     const guessSelect = document.getElementById("roleGuessSelect");
     if (guessSelect) action.guessed_role = guessSelect.value;
     const bombMode = document.getElementById("bombModeSelect");
     if (bombMode) action.bomb_action = bombMode.value;
     try {
-        await API.sendAction(currentRoomCode, currentPlayerId, action);
+        const result = await API.sendAction(currentRoomCode, currentPlayerId, action);
+        selectedNightTarget = action.target_id || "pass";
+        selectedAttackTarget = action.attack_target_id || "pass";
         document.getElementById("actionArea").style.display = "none";
         document.getElementById("submittedText").style.display = "block";
+
+        // ホストは自分のアクションを提出しても、夜を終了する権限を失わない。
+        // まだ夜なら即座にボタンを再表示する。
+        const nightEndArea = document.getElementById("nightEndArea");
+        if (nightEndArea) {
+            nightEndArea.style.display = result.phase === "NIGHT" ? "block" : "none";
+        }
     } catch (err) { alert(err.message); }
 }
 
@@ -306,7 +344,10 @@ async function updateGameState() {
     try {
         const info = await API.getPlayerInfo(currentRoomCode, currentPlayerId);
         document.getElementById("phaseText").innerText = `現在のフェーズ: ${info.phase} / ${info.day_count}日目`;
-        const roleName = document.getElementById("roleName"); roleName.innerText = `あなたの役職: ${info.displayed_role}（${info.camp_name || "陣営不明"}陣営）`; roleName.dataset.role = info.displayed_role;
+        const roleName = document.getElementById("roleName");
+        const campText = info.camp_name || (info.camp === "innocent" ? "イノセント" : info.camp === "imposter" ? "インポスター" : info.camp === "neutral" ? "ニュートラル" : "陣営不明");
+        roleName.innerText = `あなたの役職: ${info.displayed_role}（${campText}陣営）`;
+        roleName.dataset.role = info.displayed_role;
         document.getElementById("statusText").innerText = info.alive ? "状態: 生存" : "状態: 死亡";
         renderParticipants(info);
         const resultBox = document.getElementById("resultBox");
@@ -315,9 +356,16 @@ async function updateGameState() {
         document.getElementById("hostControls").style.display = info.is_host && info.phase === "SETUP" ? "block" : "none";
         const nightEndArea = document.getElementById("nightEndArea");
         if (nightEndArea) {
-            nightEndArea.style.display = info.is_host && info.phase === "NIGHT" ? "block" : "none";
+            // ホストの「夜を終了する」は、自分のアクション提出状態とは独立して表示する。
+            // 他プレイヤーが未提出なら、ホスト自身が提出済みでもこのボタンを残す。
+            const showNightEnd = Boolean(info.is_host && info.phase === "NIGHT");
+            nightEndArea.style.display = showNightEnd ? "block" : "none";
         }
         resetDayUI();
+        if (info.phase !== "NIGHT") {
+            selectedNightTarget = "pass";
+            selectedAttackTarget = "pass";
+        }
         if (info.phase === "NIGHT" && info.alive && !info.action_submitted) {
             buildRoleActionUI(info); document.getElementById("actionArea").style.display = "block"; document.getElementById("submittedText").style.display = "none";
         } else document.getElementById("actionArea").style.display = "none";
