@@ -1393,9 +1393,13 @@ async def send_action(room_code: str, req: ActionRequest):
 
     role = get_effective_role(player)
 
+    # 「何もしない」は全役職で有効な夜アクション。
+    # 対象が必要な役職でも、パスを選んだ場合は能力を使わず夜を待てる。
+    is_pass = req.target_id in (None, "", "pass")
+
     target = None
 
-    if req.target_id and req.target_id != "pass":
+    if not is_pass:
         target = validate_target(
             room,
             req.player_id,
@@ -1408,7 +1412,9 @@ async def send_action(room_code: str, req: ActionRequest):
         # Fool can submit a fake-looking action, but it has no effect.
         room.actions[req.player_id] = action
     else:
-        check_role_action_valid(room, player, target, action)
+        # パスなら役職固有の「対象必須」チェックを行わない。
+        if not is_pass:
+            check_role_action_valid(room, player, target, action)
         room.actions[req.player_id] = action
 
     if len(room.actions) >= len(alive_players(room)):
@@ -1418,6 +1424,29 @@ async def send_action(room_code: str, req: ActionRequest):
         "ok": True,
         "phase": room.phase,
         "resolved": room.phase != "NIGHT"
+    }
+
+
+@app.post("/api/room/{room_code}/night/end")
+async def end_night(room_code: str, req: StartRequest):
+    """ホストが夜を強制終了する。未提出者は何もしない扱いで解決する。"""
+    room = rooms.get(room_code.upper())
+
+    if not room:
+        raise HTTPException(status_code=404, detail="部屋がありません")
+
+    if room.host_id != req.host_player_id:
+        raise HTTPException(status_code=403, detail="ホストのみ夜を終了できます")
+
+    if room.phase != "NIGHT":
+        raise HTTPException(status_code=400, detail="現在は夜ではありません")
+
+    resolve_night(room)
+
+    return {
+        "ok": True,
+        "phase": room.phase,
+        "resolved": True
     }
 
 

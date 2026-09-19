@@ -112,11 +112,18 @@ function buildRoleActionUI(info) {
     const extraArea = document.getElementById("extraActionArea");
     const actionHelp = document.getElementById("actionHelp");
     actionRoleText.innerText = `${info.displayed_role} の夜アクション`;
+    // 2秒ごとのポーリングでUIを再構築しても、現在選択中の対象を維持する。
+    const previousTarget = targetSelect.value;
     targetSelect.innerHTML = "";
     info.targets.forEach(t => {
         const opt = document.createElement("option"); opt.value = t.id; opt.innerText = t.name;
         targetSelect.appendChild(opt);
     });
+    if (previousTarget && info.targets.some(t => t.id === previousTarget)) {
+        targetSelect.value = previousTarget;
+    } else if (info.targets.some(t => t.id === "pass")) {
+        targetSelect.value = "pass";
+    }
     extraArea.innerHTML = ""; actionHelp.innerText = "";
     const role = info.displayed_role;
 
@@ -244,6 +251,20 @@ function renderResultActions(info) {
     const waiting = document.getElementById("rematchWaitingText"); if (waiting) waiting.style.display = info.is_host ? "none" : "block";
 }
 
+async function handleNightEnd() {
+    if (!currentRoomCode || !currentPlayerId) return;
+    const button = document.getElementById("nightEndButton");
+    if (button) { button.disabled = true; button.innerText = "夜を終了中..."; }
+    try {
+        await API.endNight(currentRoomCode, currentPlayerId);
+        await updateGameState();
+    } catch (err) {
+        alert(err.message);
+    } finally {
+        if (button) { button.disabled = false; button.innerText = "夜を終了する（ホスト）"; }
+    }
+}
+
 async function handleRematch() {
     if (!currentRoomCode || !currentPlayerId) return;
     const button = document.getElementById("rematchButton");
@@ -275,6 +296,10 @@ async function updateGameState() {
         if (info.message) { resultBox.innerText = info.message; resultBox.style.display = "block"; }
         renderPrivateReports(info);
         document.getElementById("hostControls").style.display = info.is_host && info.phase === "SETUP" ? "block" : "none";
+        const nightEndArea = document.getElementById("nightEndArea");
+        if (nightEndArea) {
+            nightEndArea.style.display = info.is_host && info.phase === "NIGHT" ? "block" : "none";
+        }
         resetDayUI();
         if (info.phase === "NIGHT" && info.alive && !info.action_submitted) {
             buildRoleActionUI(info); document.getElementById("actionArea").style.display = "block"; document.getElementById("submittedText").style.display = "none";

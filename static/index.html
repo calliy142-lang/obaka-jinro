@@ -253,6 +253,15 @@
             夜のアクションを受け付けました。他のプレイヤーを待っています...
         </div>
 
+        <div id="nightEndArea" class="panel" style="display:none;margin-top:12px;border:2px solid #dc3545;background:#fff5f5;">
+            <div style="font-weight:bold;color:#b02a37;margin-bottom:8px;">ホスト操作</div>
+            <div style="font-size:0.9em;color:#666;margin-bottom:8px;">未提出のプレイヤーは「何もしない」として、この夜を終了します。</div>
+            <button id="nightEndButton" onclick="handleNightEnd()"
+                    style="padding:8px 16px;background:#dc3545;color:white;border:none;border-radius:4px;">
+                夜を終了する（ホスト）
+            </button>
+        </div>
+
         <!-- 昼投票 -->
         <div id="voteArea" class="panel" style="display:none;">
             <h3 style="margin-top:0;">昼の投票</h3>

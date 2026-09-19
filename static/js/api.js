@@ -45,6 +45,21 @@ const API = {
         return await res.json();
     },
 
+    async endNight(roomCode, hostPlayerId) {
+        const res = await fetch(`/api/room/${roomCode}/night/end`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ host_player_id: hostPlayerId })
+        });
+
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.detail || "夜の終了に失敗しました");
+        }
+
+        return await res.json();
+    },
+
     async sendVote(roomCode, playerId, targetId) {
         const res = await fetch(`/api/room/${roomCode}/vote`, {
             method: 'POST',
