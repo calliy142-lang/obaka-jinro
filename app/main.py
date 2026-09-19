@@ -1,9 +1,8 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import random
 import uuid
-import json
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -11,7 +10,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 rooms = {}
 
 ROLE_CONFIGS = {
-    # イノセント陣営
     "fool": {"camp": "innocent", "name": "バカ"},
     "doctor": {"camp": "innocent", "name": "ドクター"},
     "mouse": {"camp": "innocent", "name": "ねずみ"},
@@ -21,11 +19,9 @@ ROLE_CONFIGS = {
     "investigator": {"camp": "innocent", "name": "インベスティゲーター"},
     "provoker": {"camp": "innocent", "name": "挑発者"},
     "tracker": {"camp": "innocent", "name": "トラッカー"},
-    # インポスター陣営
     "imposter": {"camp": "imposter", "name": "インポスター"},
     "blaimer": {"camp": "imposter", "name": "ブレイマー"},
     "cleaner": {"camp": "imposter", "name": "クリーナー"},
-    # 第三陣営
     "serial_killer": {"camp": "neutral", "name": "シリアルキラー"},
     "bomber": {"camp": "neutral", "name": "ボマー"},
     "survivor": {"camp": "neutral", "name": "サバイバー"},
@@ -39,7 +35,7 @@ class Room:
         self.room_code = room_code
         self.players = {}
         self.host_id = None
-        self.phase = "SETUP" # SETUP, NIGHT, DAY, VOTE, ENDED
+        self.phase = "SETUP"
         self.day_count = 1
         self.day_timer = 60
         self.role_distribution = {role: 0 for role in ROLE_CONFIGS}
@@ -69,7 +65,7 @@ def create_room():
 def join_room(room_code: str, data: dict):
     room_code = room_code.upper()
     if room_code not in rooms:
-        raise HTTPException(status_code=404, detail="指定された部屋が見つかりません。新しく作成してください。")
+        raise HTTPException(status_code=404, detail="部屋が見つかりません")
     room = rooms[room_code]
     name = data.get("name")
     if not name:
@@ -140,12 +136,10 @@ def get_player_info(room_code: str, player_id: str):
     if room_code not in rooms:
         raise HTTPException(status_code=404, detail="部屋が見つかりません")
     room = rooms[room_code]
-    
     if player_id not in room.players:
         raise HTTPException(status_code=404, detail="プレイヤーが見つかりません")
     
     player = room.players[player_id]
-    
     targets = [{"id": p["id"], "name": p["name"]} for p in room.players.values() if p["id"] != player_id and p["alive"]]
     targets.insert(0, {"id": "pass", "name": "能力を使わない（パス）"})
 
