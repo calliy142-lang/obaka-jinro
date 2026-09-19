@@ -3,7 +3,7 @@ let currentPlayerId = localStorage.getItem('feign_player_id') || null;
 let pollInterval = null;
 let currentPhase = null;
 
-// ページ読み込み時にセッションが残っていれば自動復帰
+// 起動時にセッションがあれば自動読み込み
 window.addEventListener('DOMContentLoaded', () => {
     if (currentRoomCode && currentPlayerId) {
         showGameScreen();
@@ -23,7 +23,6 @@ async function handleCreateRoom() {
         const joinRes = await API.joinRoom(currentRoomCode, nameInput);
         currentPlayerId = joinRes.player_id;
 
-        // ブラウザ更新対策に保存
         localStorage.setItem('feign_room_code', currentRoomCode);
         localStorage.setItem('feign_player_id', currentPlayerId);
 
@@ -47,7 +46,6 @@ async function handleJoinRoom() {
         const joinRes = await API.joinRoom(currentRoomCode, nameInput);
         currentPlayerId = joinRes.player_id;
 
-        // ブラウザ更新対策に保存
         localStorage.setItem('feign_room_code', currentRoomCode);
         localStorage.setItem('feign_player_id', currentPlayerId);
 
@@ -56,6 +54,13 @@ async function handleJoinRoom() {
     } catch (err) {
         alert("参加失敗: " + err.message);
     }
+}
+
+// 部屋を出る / リセット
+function handleLeaveRoom() {
+    localStorage.removeItem('feign_room_code');
+    localStorage.removeItem('feign_player_id');
+    location.reload();
 }
 
 function showGameScreen() {
@@ -70,18 +75,18 @@ function startPolling() {
     pollInterval = setInterval(fetchGameStatus, 2000);
 }
 
-// ステータス更新処理
+// 定期ステータス取得
 async function fetchGameStatus() {
     if (!currentRoomCode || !currentPlayerId) return;
 
     try {
         const info = await API.getPlayerInfo(currentRoomCode, currentPlayerId);
         
-        // 1. 見た目の役職表示
+        // 役職・フェーズ名表示
         document.getElementById('displayed-role').textContent = info.displayed_role || "未定";
         document.getElementById('phase-display').textContent = getPhaseName(info.phase);
 
-        // 2. ホストボタンの制御
+        // ホスト/ゲストのボタン制御
         const hostControls = document.getElementById('host-controls');
         const waitingMessage = document.getElementById('waiting-message');
 
@@ -93,15 +98,16 @@ async function fetchGameStatus() {
             waitingMessage.classList.remove('hidden');
         }
 
-        // 3. 待機中のプレイヤー一覧
-        if ((info.phase === 'lobby' || info.phase === 'setup' || !info.phase) && info.all_players) {
+        // ロビー参加者リスト更新
+        if (info.all_players) {
             renderLobbyPlayers(info.all_players);
         }
 
-        // 4. フェーズ変更検知
-        if (currentPhase !== info.phase) {
-            currentPhase = info.phase;
-            updatePhaseUI(info);
+        // フェーズが変わった時だけ画面切り替え
+        const rawPhase = (info.phase || 'lobby').toLowerCase();
+        if (currentPhase !== rawPhase) {
+            currentPhase = rawPhase;
+            updatePhaseUI(rawPhase, info);
         }
 
     } catch (err) {
@@ -110,26 +116,22 @@ async function fetchGameStatus() {
 }
 
 function getPhaseName(phase) {
-    const phaseNames = {
-        'setup': 'ロビー待機中',
-        'lobby': 'ロビー待機中',
-        'night': '夜（行動選択）',
-        'day': '昼（話し合い）',
-        'vote': '投票中',
-        'result': '勝敗発表'
-    };
-    return phaseNames[phase] || phase || 'ロビー待機中';
+    if (!phase) return 'ロビー待機中';
+    const p = phase.toLowerCase();
+    if (p === 'setup' || p === 'lobby') return 'ロビー待機中';
+    if (p === 'night') return '夜（行動選択）';
+    if (p === 'day') return '昼（話し合い）';
+    if (p === 'vote') return '追放投票中';
+    if (p === 'result') return '勝敗発表';
+    return phase;
 }
 
-// 各フェーズ画面の表示切り替え
-function updatePhaseUI(info) {
-    const phase = info.phase || 'setup';
-
-    // 一旦すべてのフェーズ要素を隠す
+// フェーズごとのUI切り替え
+function updatePhaseUI(phase, info) {
+    // 全フェーズ要素を一旦隠す
     document.querySelectorAll('.phase-section').forEach(el => el.classList.add('hidden'));
 
-    // setup もしくは lobby の場合はロビー画面を表示
-    if (phase === 'lobby' || phase === 'setup') {
+    if (phase === 'setup' || phase === 'lobby') {
         document.getElementById('lobby-phase').classList.remove('hidden');
     } else if (phase === 'night') {
         document.getElementById('night-phase').classList.remove('hidden');
@@ -184,6 +186,8 @@ function populatePlayerDropdown(selectId, players) {
 
 function renderLobbyPlayers(players) {
     const container = document.getElementById('lobby-players-list');
+    if (!container || !players) return;
+    
     container.innerHTML = '';
     players.forEach(p => {
         const div = document.createElement('div');
@@ -195,6 +199,8 @@ function renderLobbyPlayers(players) {
 
 function renderLivingPlayers(players) {
     const container = document.getElementById('living-players-list');
+    if (!container) return;
+    
     container.innerHTML = '<strong>生存プレイヤー:</strong>';
     if (!players) return;
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Feign (バカ人狼)</title>
+    <title>Feign (おバカ村)</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -89,6 +89,7 @@
             padding: 10px 15px;
             border-radius: 5px;
             margin-bottom: 15px;
+            min-height: 50px;
         }
         .player-item {
             padding: 6px 0;
@@ -101,7 +102,7 @@
     <div class="container">
         <h1>Feign (おバカ村)</h1>
 
-        <!-- 1. ログイン / 部屋作成・参加画面 -->
+        <!-- 1. 部屋作成・参加画面 -->
         <div id="setup-screen">
             <div class="input-group">
                 <label for="player-name">プレイヤー名</label>
@@ -123,37 +124,36 @@
 
         <!-- 2. ゲーム画面 -->
         <div id="game-screen" class="hidden">
-            <div class="status-badge" id="phase-display">待機中</div>
+            <div class="status-badge" id="phase-display">ロビー待機中</div>
             <h2>部屋コード: <span id="room-code-display"></span></h2>
 
-            <!-- 役職表示（Feignでは見た目の役職が表示される） -->
             <div class="role-box">
                 見えている役職:<br>
                 <span id="displayed-role" class="role-title">未定</span>
             </div>
 
-            <!-- 待機フェーズ -->
+            <!-- 待機フェーズ (初期表示) -->
             <div id="lobby-phase" class="phase-section">
                 <h3>参加者一覧</h3>
-                <div class="player-list" id="lobby-players-list"></div>
+                <div class="player-list" id="lobby-players-list">読み込み中...</div>
                 
-                <!-- ホスト専用スタートボタン -->
-                <div id="host-controls" class="hidden">
+                <!-- ホスト用ボタン -->
+                <div id="host-controls">
                     <button class="btn-danger" onclick="handleStartGame()">ゲームを開始する</button>
                 </div>
                 <p id="waiting-message" class="hidden">ホストがゲームを開始するのを待っています...</p>
+                <button class="btn-secondary" style="margin-top:20px; background-color:#555;" onclick="handleLeaveRoom()">部屋を出る</button>
             </div>
 
-            <!-- 夜フェーズ（訪問・能力実行） -->
+            <!-- 夜フェーズ -->
             <div id="night-phase" class="phase-section hidden">
                 <h3>🌙 夜の行動（訪問先選択）</h3>
-                <p id="role-instruction">対象のプレイヤーの家を選択してください。</p>
+                <p>対象のプレイヤーの家を選択してください。</p>
                 <div class="input-group">
                     <label for="night-target-select">訪問する家</label>
                     <select id="night-target-select"></select>
                 </div>
                 
-                <!-- 魔術師用等の追加入力欄 -->
                 <div id="extra-action-input" class="input-group hidden">
                     <label for="guess-role-select">予想する役職</label>
                     <select id="guess-role-select">
@@ -175,12 +175,10 @@
                 <p id="action-status-msg" style="color: #2ecc71;"></p>
             </div>
 
-            <!-- 昼・討論フェーズ -->
+            <!-- 昼フェーズ -->
             <div id="day-phase" class="phase-section hidden">
                 <h3>☀️ 昼の話し合い</h3>
-                <div id="night-results" class="role-box" style="font-size: 14px; text-align: left;">
-                    <!-- 夜の結果報告（誰が来ただの足跡だの） -->
-                </div>
+                <div id="night-results" class="role-box" style="font-size: 14px; text-align: left;"></div>
                 <div class="player-list" id="living-players-list"></div>
             </div>
 
@@ -196,7 +194,7 @@
                 <p id="vote-status-msg" style="color: #2ecc71;"></p>
             </div>
 
-            <!-- 結果発表 -->
+            <!-- 結果フェーズ -->
             <div id="result-phase" class="phase-section hidden">
                 <h3>🏆 勝敗判定・種明かし</h3>
                 <div id="result-content" class="role-box" style="text-align: left; font-size: 14px;"></div>
