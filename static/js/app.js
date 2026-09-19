@@ -1,6 +1,6 @@
 let currentState = {
-    roomCode: null,
-    playerId: null,
+    roomCode: localStorage.getItem('roomCode') || null,
+    playerId: localStorage.getItem('playerId') || null,
     isHost: false,
     phase: 'lobby',
     displayedRole: '',
@@ -23,6 +23,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (startBtn) startBtn.addEventListener('click', handleStartGame);
     if (actionBtn) actionBtn.addEventListener('click', handleSendAction);
     if (voteBtn) voteBtn.addEventListener('click', handleSendVote);
+
+    // F5リロード時、すでに部屋に入っていれば状態を再開
+    if (currentState.roomCode && currentState.playerId) {
+        startPolling();
+    }
 });
 
 async function handleCreateRoom() {
@@ -40,6 +45,7 @@ async function handleCreateRoom() {
         currentState.playerId = joinRes.player_id;
         currentState.isHost = joinRes.is_host;
 
+        saveStateToStorage();
         startPolling();
     } catch (err) {
         alert(err.message);
@@ -61,10 +67,21 @@ async function handleJoinRoom() {
         currentState.playerId = joinRes.player_id;
         currentState.isHost = joinRes.is_host;
 
+        saveStateToStorage();
         startPolling();
     } catch (err) {
         alert(err.message);
     }
+}
+
+function saveStateToStorage() {
+    localStorage.setItem('roomCode', currentState.roomCode);
+    localStorage.setItem('playerId', currentState.playerId);
+}
+
+function clearStateStorage() {
+    localStorage.removeItem('roomCode');
+    localStorage.removeItem('playerId');
 }
 
 async function handleStartGame() {
@@ -134,6 +151,9 @@ async function updateGameStatus() {
         renderUI(data);
     } catch (err) {
         console.error(err);
+        // 部屋が存在しない場合などはストレージを破棄して戻す
+        clearStateStorage();
+        showScreen('setup-screen');
     }
 }
 
@@ -201,4 +221,5 @@ function updateDayUI(data) {
 function updateResultUI(data) {
     const resEl = document.getElementById('game-result-text');
     if (resEl) resEl.innerText = data.result;
+    clearStateStorage(); // 勝敗が決まったら次回用にリセット
 }

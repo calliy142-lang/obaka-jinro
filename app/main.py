@@ -160,9 +160,9 @@ def get_player_info(room_code: str, player_id: str):
     all_p = [{"id": p.id, "name": p.name, "is_host": p.is_host, "is_alive": p.is_alive} for p in room.players.values()]
     other_p = [p for p in all_p if p["id"] != player_id and p["is_alive"]]
 
-    reports = room.night_reports.get(player_id, [])
+    reports = list(room.night_reports.get(player_id, []))
     if room.last_vote_result:
-        reports = [f"【前回の追放結果】 {room.last_vote_result}"] + reports
+        reports = [f"【投票結果】 {room.last_vote_result}"] + reports
 
     night_report_text = "<br>".join(reports) if reports else "特に報告はありません。"
 
@@ -263,7 +263,6 @@ def resolve_night_phase(room: Room):
 
     room.phase = "vote"
     room.night_actions.clear()
-    check_win_conditions(room)
 
 @app.post("/api/room/{room_code}/vote")
 def send_vote(room_code: str, req: VoteRequest):
@@ -293,6 +292,7 @@ def resolve_vote_phase(room: Room):
     else:
         room.last_vote_result = "誰も追放されませんでした。"
 
+    # 追放後に勝敗チェック
     game_over = check_win_conditions(room)
 
     if not game_over:
@@ -309,11 +309,11 @@ def check_win_conditions(room: Room) -> bool:
 
     if len(impostors) == 0 and len(neutrals) == 0:
         room.phase = "result"
-        room.result_text = "🎉 イノセント陣営の勝利です！"
+        room.result_text = f"【結果】{room.last_vote_result}\n🎉 イノセント陣営の勝利です！"
         return True
     elif len(impostors) >= len(innocents) + len(neutrals):
         room.phase = "result"
-        room.result_text = "💀 インポスター陣営の勝利です！"
+        room.result_text = f"【結果】{room.last_vote_result}\n💀 インポスター陣営の勝利です！"
         return True
     return False
 
