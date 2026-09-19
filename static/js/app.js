@@ -9,7 +9,6 @@ let currentState = {
 
 let pollInterval = null;
 
-// DOM要素の取得
 const createRoomBtn = document.getElementById('create-room-btn');
 const joinRoomBtn = document.getElementById('join-room-btn');
 const roomCodeInput = document.getElementById('room-code-input');
@@ -18,26 +17,14 @@ const startBtn = document.getElementById('start-game-btn');
 const actionBtn = document.getElementById('send-action-btn');
 const voteBtn = document.getElementById('send-vote-btn');
 
-// イベントリスナーの登録
 document.addEventListener('DOMContentLoaded', () => {
-    if (createRoomBtn) {
-        createRoomBtn.addEventListener('click', handleCreateRoom);
-    }
-    if (joinRoomBtn) {
-        joinRoomBtn.addEventListener('click', handleJoinRoom);
-    }
-    if (startBtn) {
-        startBtn.addEventListener('click', handleStartGame);
-    }
-    if (actionBtn) {
-        actionBtn.addEventListener('click', handleSendAction);
-    }
-    if (voteBtn) {
-        voteBtn.addEventListener('click', handleSendVote);
-    }
+    if (createRoomBtn) createRoomBtn.addEventListener('click', handleCreateRoom);
+    if (joinRoomBtn) joinRoomBtn.addEventListener('click', handleJoinRoom);
+    if (startBtn) startBtn.addEventListener('click', handleStartGame);
+    if (actionBtn) actionBtn.addEventListener('click', handleSendAction);
+    if (voteBtn) voteBtn.addEventListener('click', handleSendVote);
 });
 
-// 部屋作成ハンドラー
 async function handleCreateRoom() {
     const playerName = playerNameInput ? playerNameInput.value.trim() : "";
     if (!playerName) {
@@ -59,7 +46,6 @@ async function handleCreateRoom() {
     }
 }
 
-// 部屋参加ハンドラー
 async function handleJoinRoom() {
     const roomCode = roomCodeInput ? roomCodeInput.value.trim().toUpperCase() : "";
     const playerName = playerNameInput ? playerNameInput.value.trim() : "";
@@ -81,20 +67,22 @@ async function handleJoinRoom() {
     }
 }
 
-// ゲーム開始ハンドラー
 async function handleStartGame() {
     try {
-        await fetch(`/api/room/${currentState.roomCode}/start`, {
+        const res = await fetch(`/api/room/${currentState.roomCode}/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ host_player_id: currentState.playerId })
         });
+        if (!res.ok) {
+            const data = await res.json();
+            alert(data.detail || "開始に失敗しました");
+        }
     } catch (err) {
         alert(err.message);
     }
 }
 
-// 夜の行動送信
 async function handleSendAction() {
     const targetSelect = document.getElementById('action-target-select');
     const extraInput = document.getElementById('action-extra-input');
@@ -110,7 +98,6 @@ async function handleSendAction() {
     }
 }
 
-// 投票送信
 async function handleSendVote() {
     const voteSelect = document.getElementById('vote-target-select');
     const targetId = voteSelect ? voteSelect.value : null;
@@ -128,7 +115,6 @@ async function handleSendVote() {
     }
 }
 
-// ポーリング処理（状態の自動更新）
 function startPolling() {
     if (pollInterval) clearInterval(pollInterval);
     updateGameStatus();
@@ -151,9 +137,7 @@ async function updateGameStatus() {
     }
 }
 
-// UIの表示切り替え
 function renderUI(data) {
-    // 画面ブロックの切り替え
     const screens = ['setup-screen', 'lobby-screen', 'night-screen', 'day-screen', 'result-screen'];
     screens.forEach(s => {
         const el = document.getElementById(s);

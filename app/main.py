@@ -257,7 +257,7 @@ def resolve_night_phase(room: Room):
         players[k_id].is_alive = False
         room.night_reports[k_id].append("あなたは昨夜キルされました。")
 
-    room.phase = "day"
+    room.phase = "vote"  # 昼の議論・投票フェーズへ
     room.night_actions.clear()
     check_win_conditions(room)
 
@@ -278,7 +278,8 @@ def send_vote(room_code: str, req: VoteRequest):
 def resolve_vote_phase(room: Room):
     counts: Dict[str, int] = {}
     for voter_id, target_id in room.votes.items():
-        counts[target_id] = counts.get(target_id, 0) + 1
+        if target_id:
+            counts[target_id] = counts.get(target_id, 0) + 1
 
     if counts:
         executed_id = max(counts, key=counts.get)
@@ -288,10 +289,16 @@ def resolve_vote_phase(room: Room):
     else:
         room.result_text = "誰も追放されませんでした。"
 
-    room.phase = "result"
-    check_win_conditions(room)
+    game_over = check_win_conditions(room)
 
-def check_win_conditions(room: Room):
+    if not game_over:
+        room.phase = "night"
+        room.day_count += 1
+        room.night_actions.clear()
+        room.votes.clear()
+        room.night_reports = {p_id: [room.result_text] for p_id in room.players}
+
+def check_win_conditions(room: Room) -> bool:
     alive = [p for p in room.players.values() if p.is_alive]
     innocents = [p for p in alive if p.camp == "innocent"]
     impostors = [p for p in alive if p.camp == "impostor"]
@@ -300,14 +307,15 @@ def check_win_conditions(room: Room):
     if len(impostors) == 0 and len(neutrals) == 0:
         room.phase = "result"
         room.result_text = "🎉 イノセント陣営の勝利です！"
+        return True
     elif len(impostors) >= len(innocents) + len(neutrals):
         room.phase = "result"
         room.result_text = "💀 インポスター陣営の勝利です！"
+        return True
+    return False
 
-# /static へのアクセスを static フォルダにマッピング
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# トップページ (/) にアクセスした時に index.html を返す
 @app.get("/")
 def read_root():
     from fastapi.responses import FileResponse
