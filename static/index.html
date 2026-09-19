@@ -5,17 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>おバカ人狼</title>
     <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 0 10px; }
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            max-width: 650px;
+            margin: 20px auto;
+            padding: 0 15px;
+            background-color: #f4f6f9;
+            color: #333;
+        }
+        h1 { text-align: center; color: #2c3e50; }
         .screen { display: none; }
-        .card { border: 1px solid #ccc; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
-        button { padding: 8px 16px; margin: 5px 0; cursor: pointer; }
-        .danger-btn { background-color: #ff4d4d; color: white; border: none; border-radius: 4px; }
-        .secondary-btn { background-color: #6c757d; color: white; border: none; border-radius: 4px; }
-        select, input { padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; }
-        ul { padding-left: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
+        .card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 10px 18px;
+            margin: 6px 4px;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-primary:hover { background-color: #0056b3; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-success:hover { background-color: #218838; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .btn-danger:hover { background-color: #c82333; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        .btn-secondary:hover { background-color: #5a6268; }
+        select, input {
+            padding: 10px;
+            margin: 8px 0;
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+        ul { padding-left: 20px; line-height: 1.8; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; }
+        th { background-color: #e9ecef; }
+        .setting-group { margin: 12px 0; padding: 10px; background: #f8f9fa; border-radius: 6px; }
     </style>
 </head>
 <body>
@@ -26,10 +64,10 @@
         <div class="card">
             <h2>参加・作成</h2>
             <input type="text" id="player-name-input" placeholder="プレイヤー名">
-            <button id="create-room-btn">部屋を作成</button>
+            <button id="create-room-btn" class="btn-primary">部屋を作成</button>
             <hr>
             <input type="text" id="room-code-input" placeholder="部屋コード (4文字)">
-            <button id="join-room-btn">部屋に参加</button>
+            <button id="join-room-btn" class="btn-success">部屋に参加</button>
         </div>
     </div>
 
@@ -39,8 +77,28 @@
             <h2>ロビー (部屋コード: <span id="display-room-code"></span>)</h2>
             <h3>参加プレイヤー:</h3>
             <ul id="player-list"></ul>
-            <button id="start-game-btn" style="display: none;">ゲームを開始</button>
-            <button id="leave-room-btn" class="secondary-btn">退出する</button>
+
+            <!-- ホスト用設定エリア -->
+            <div id="host-settings" class="setting-group" style="display: none;">
+                <h3>役職人数設定</h3>
+                <label>インポスター人数:
+                    <select id="setting-impostors">
+                        <option value="1">1名</option>
+                        <option value="2">2名</option>
+                        <option value="3">3名</option>
+                    </select>
+                </label>
+                <label>第三陣営人数:
+                    <select id="setting-neutrals">
+                        <option value="0">0名</option>
+                        <option value="1">1名</option>
+                        <option value="2">2名</option>
+                    </select>
+                </label>
+            </div>
+
+            <button id="start-game-btn" class="btn-success" style="display: none;">ゲームを開始</button>
+            <button id="leave-room-btn" class="btn-secondary">退出する</button>
         </div>
     </div>
 
@@ -53,14 +111,14 @@
             <div id="action-section">
                 <label>能力の対象:</label>
                 <select id="action-target-select"></select>
-                <input type="text" id="action-extra-input" placeholder="補足入力 (魔術師の推測など)" style="display:none;">
-                <button id="send-action-btn">行動確定</button>
+                <input type="text" id="action-extra-input" placeholder="補足入力" style="display:none;">
+                <button id="send-action-btn" class="btn-primary">行動確定</button>
             </div>
 
             <div id="kill-section" style="display:none; margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 10px;">
-                <label style="color: red; font-weight: bold;">【インポスター作戦】襲撃対象:</label>
+                <label style="color: #dc3545; font-weight: bold;">【インポスター作戦】襲撃対象:</label>
                 <select id="kill-target-select"></select>
-                <button id="send-kill-btn" class="danger-btn">襲撃選択</button>
+                <button id="send-kill-btn" class="btn-danger">襲撃選択</button>
             </div>
         </div>
     </div>
@@ -69,10 +127,10 @@
     <div id="day-screen" class="screen">
         <div class="card">
             <h2>昼・投票フェーズ</h2>
-            <div id="night-report-box" style="background: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 10px;"></div>
+            <div id="night-report-box" style="background: #eef2f7; padding: 12px; border-radius: 6px; margin-bottom: 12px;"></div>
             <label>追放するプレイヤーを選択:</label>
             <select id="vote-target-select"></select>
-            <button id="send-vote-btn">投票する</button>
+            <button id="send-vote-btn" class="btn-danger">投票する</button>
         </div>
     </div>
 
@@ -80,14 +138,14 @@
     <div id="result-screen" class="screen">
         <div class="card">
             <h2>ゲーム終了</h2>
-            <pre id="game-result-text" style="font-size: 1.1em; font-weight: bold;"></pre>
+            <pre id="game-result-text" style="font-size: 1.1em; font-weight: bold; font-family: inherit;"></pre>
             
             <h3>最終役職一覧</h3>
             <table id="roles-summary-table">
                 <thead>
                     <tr>
                         <th>名前</th>
-                        <th>表示役職</th>
+                        <th>表示された役職</th>
                         <th>本物の役職</th>
                         <th>陣営</th>
                     </tr>
@@ -95,8 +153,8 @@
                 <tbody id="roles-summary-body"></tbody>
             </table>
             <br>
-            <button id="play-again-btn" style="display: none;">同じ部屋で広場に戻る（もう一度遊ぶ）</button>
-            <button id="result-leave-btn" class="secondary-btn">メインメニューに戻る</button>
+            <button id="return-lobby-btn" class="btn-success">広場（同じルーム）に戻る</button>
+            <button id="result-leave-btn" class="btn-secondary">部屋を退出する</button>
         </div>
     </div>
 

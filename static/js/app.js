@@ -17,7 +17,7 @@ const leaveBtn = document.getElementById('leave-room-btn');
 const actionBtn = document.getElementById('send-action-btn');
 const killBtn = document.getElementById('send-kill-btn');
 const voteBtn = document.getElementById('send-vote-btn');
-const playAgainBtn = document.getElementById('play-again-btn');
+const returnLobbyBtn = document.getElementById('return-lobby-btn');
 const resultLeaveBtn = document.getElementById('result-leave-btn');
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (actionBtn) actionBtn.addEventListener('click', handleSendAction);
     if (killBtn) killBtn.addEventListener('click', handleSendKill);
     if (voteBtn) voteBtn.addEventListener('click', handleSendVote);
-    if (playAgainBtn) playAgainBtn.addEventListener('click', handleResetRoom);
+    if (returnLobbyBtn) returnLobbyBtn.addEventListener('click', handleReturnLobby);
     if (resultLeaveBtn) resultLeaveBtn.addEventListener('click', handleLeaveRoom);
 
     if (currentState.roomCode && currentState.playerId) {
@@ -83,12 +83,12 @@ async function handleLeaveRoom() {
     showScreen('setup-screen');
 }
 
-async function handleResetRoom() {
+async function handleReturnLobby() {
     try {
-        await fetch(`/api/room/${currentState.roomCode}/reset`, {
+        await fetch(`/api/room/${currentState.roomCode}/return_lobby`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ host_player_id: currentState.playerId })
+            body: JSON.stringify({ player_id: currentState.playerId })
         });
     } catch (err) { alert(err.message); }
 }
@@ -106,11 +106,18 @@ function clearStateStorage() {
 }
 
 async function handleStartGame() {
+    const impCount = parseInt(document.getElementById('setting-impostors').value) || 1;
+    const neuCount = parseInt(document.getElementById('setting-neutrals').value) || 0;
+
     try {
         await fetch(`/api/room/${currentState.roomCode}/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ host_player_id: currentState.playerId })
+            body: JSON.stringify({
+                host_player_id: currentState.playerId,
+                impostor_count: impCount,
+                neutral_count: neuCount
+            })
         });
     } catch (err) { alert(err.message); }
 }
@@ -159,6 +166,7 @@ async function updateGameStatus() {
         currentState.displayedRole = data.displayed_role;
         currentState.camp = data.camp;
         currentState.isAlive = data.is_alive;
+        currentState.isHost = data.is_host;
         renderUI(data);
     } catch (err) {
         if (err.message && err.message.includes("404")) handleLeaveRoom();
@@ -174,7 +182,11 @@ function renderUI(data) {
         showScreen('lobby-screen');
         document.getElementById('display-room-code').innerText = currentState.roomCode;
         document.getElementById('player-list').innerHTML = data.all_players.map(p => `<li>${p.name} ${p.is_host ? '(ホスト)' : ''}</li>`).join('');
+        
+        const hostSettings = document.getElementById('host-settings');
         if (startBtn) startBtn.style.display = data.is_host ? 'inline-block' : 'none';
+        if (hostSettings) hostSettings.style.display = data.is_host ? 'block' : 'none';
+
     } else if (data.phase === 'night') {
         showScreen('night-screen');
         document.getElementById('my-role-display').innerText = data.displayed_role;
@@ -204,8 +216,6 @@ function renderUI(data) {
                 <td>${r.camp_name}</td>
             </tr>
         `).join('');
-
-        if (playAgainBtn) playAgainBtn.style.display = data.is_host ? 'inline-block' : 'none';
     }
 }
 

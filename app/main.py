@@ -38,6 +38,7 @@ class Player:
         self.camp_name = "イノセント陣営"
         self.is_fool = False
         self.is_alive = True
+        self.in_result_screen = False  # 個別に結果画面を見ているかフラグ
 
 class Room:
     def __init__(self, room_code: str):
@@ -70,8 +71,13 @@ class VoteRequest(BaseModel):
     player_id: str
     target_id: str
 
-class HostRequest(BaseModel):
+class StartGameRequest(BaseModel):
     host_player_id: str
+    impostor_count: int = 1
+    neutral_count: int = 0
+
+class ReturnLobbyRequest(BaseModel):
+    player_id: str
 
 @app.post("/api/room/create")
 def create_room():
@@ -102,30 +108,29 @@ def leave_room(room_code: str, req: ActionRequest):
         if len(rooms[room_code].players) == 0:
             del rooms[room_code]
         else:
+            # 次のホストを指定
             next_host = list(rooms[room_code].players.values())[0]
             next_host.is_host = True
     return {"message": "退出しました"}
 
-@app.post("/api/room/{room_code}/reset")
-def reset_room(room_code: str, req: HostRequest):
+@app.post("/api/room/{room_code}/return_lobby")
+def return_lobby(room_code: str, req: ReturnLobbyRequest):
     room = rooms.get(room_code)
     if not room:
         raise HTTPException(status_code=404, detail="部屋が存在しません")
     
-    for p in room.players.values():
-        p.is_alive = True
-    room.phase = "lobby"
-    room.day_count = 1
-    room.night_actions.clear()
-    room.impostor_kill_target = None
-    room.votes.clear()
-    room.night_reports.clear()
-    room.last_vote_result = ""
-    room.result_text = ""
-    return {"message": "ロビーに戻りました"}
+    player = room.players.get(req.player_id)
+    if player:
+        player.in_result_screen = False
+
+    # 全員がロビー画面に戻ったら、部屋自体のフェーズもロビーに戻す
+    if all(not p.in_result_screen for p in room.players.values()):
+        room.phase = "lobby"
+
+    return {"message": "ロビー画面へ戻りました"}
 
 @app.post("/api/room/{room_code}/start")
-def start_game(room_code: str, req: HostRequest):
+def start_game(room_code: str, req: StartGameRequest):
     if room_code not in rooms:
         raise HTTPException(status_code=404, detail="部屋が見つかりません")
     room = rooms[room_code]
@@ -137,47 +142,54 @@ def start_game(room_code: str, req: HostRequest):
     if len(players_list) < 3:
         raise HTTPException(status_code=400, detail="最低3人のプレイヤーが必要です")
 
-    assign_roles_feign(players_list)
+    assign_roles_feign(players_list, req.impostor_count, req.neutral_count)
 
     room.phase = "night"
+    room.day_count = 1
     room.night_actions.clear()
     room.impostor_kill_target = None
+    room.votes.clear()
     room.night_reports = {p.id: [] for p in players_list}
     return {"message": "ゲームを開始しました"}
 
-def assign_roles_feign(players: List[Player]):
+def assign_roles_feign(players: List[Player], imp_count: int, neu_count: int):
     innocent_pool = ["ドクター", "ねずみ", "ポリス", "トラッパー", "ルックアウト", "インベスティゲーター", "挑発者", "トラッカー"]
     impostor_pool = ["ブレイマー", "クリーナー"]
     neutral_pool = ["シリアルキラー", "ボマー", "サバイバー", "シーフ", "魔術師", "ゴースト"]
 
     random.shuffle(players)
     total = len(players)
-    
-    imp_count = 1 if total <= 5 else 2
-    neu_count = 1 if total >= 6 else 0
+
+    imp_count = min(imp_count, max(1, total - 2))
+    neu_count = min(neu_count, max(0, total - imp_count - 1))
     inn_count = total - imp_count - neu_count
 
     chosen_roles = []
-    chosen_roles.extend(random.sample(impostor_pool, imp_count))
+    chosen_roles.extend([random.choice(impostor_pool) for _ in range(imp_count)])
     if neu_count > 0:
-        chosen_roles.extend(random.sample(neutral_pool, neu_count))
-    chosen_roles.extend(random.sample(innocent_pool, inn_count))
+        chosen_roles.extend([random.choice(neutral_pool) for _ in range(neu_count)])
+    chosen_roles.extend(random.sample(innocent_pool, min(inn_count, len(innocent_pool))))
+    while len(chosen_roles) < total:
+        chosen_roles.append(random.choice(innocent_pool))
 
     innocent_indices = [i for i, r in enumerate(chosen_roles) if ROLES_INFO[r]["camp"] == "innocent" and ROLES_INFO[r]["can_be_fool"]]
     fool_index = random.choice(innocent_indices) if innocent_indices else -1
 
     for idx, player in enumerate(players):
+        player.is_alive = True
+        player.in_result_screen = False
         role_name = chosen_roles[idx]
-        player.real_role = role_name
         player.camp = ROLES_INFO[role_name]["camp"]
         player.camp_name = ROLES_INFO[role_name]["camp_name"]
-        player.is_fool = False
 
         if idx == fool_index:
             player.is_fool = True
+            player.real_role = "バカ"  # 本物の役職をバカに決定
             fake_roles = [r for r in innocent_pool if ROLES_INFO[r]["can_be_fool"]]
             player.displayed_role = random.choice(fake_roles)
         else:
+            player.is_fool = False
+            player.real_role = role_name
             player.displayed_role = role_name
 
 @app.get("/api/room/{room_code}/player/{player_id}")
@@ -206,8 +218,11 @@ def get_player_info(room_code: str, player_id: str):
             "camp_name": p.camp_name
         } for p in room.players.values()]
 
+    # プレイヤー個別の画面状態（結果画面に留まっているか）を考慮
+    player_phase = "result" if (room.phase == "result" and me.in_result_screen) else room.phase
+
     return {
-        "phase": room.phase,
+        "phase": player_phase,
         "is_host": me.is_host,
         "displayed_role": f"{me.displayed_role} ({me.camp_name})",
         "camp": me.camp,
@@ -361,10 +376,14 @@ def check_win_conditions(room: Room) -> bool:
     if len(impostors) == 0 and len(neutrals) == 0:
         room.phase = "result"
         room.result_text = f"【結果】{room.last_vote_result}\n🎉 イノセント陣営の勝利！"
+        for p in room.players.values():
+            p.in_result_screen = True
         return True
     elif len(impostors) >= len(innocents) + len(neutrals):
         room.phase = "result"
         room.result_text = f"【結果】{room.last_vote_result}\n💀 インポスター陣営の勝利！"
+        for p in room.players.values():
+            p.in_result_screen = True
         return True
     return False
 
