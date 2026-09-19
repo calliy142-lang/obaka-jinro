@@ -4,47 +4,89 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>おバカ人狼</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #2a2a2a;
+            padding: 30px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        h1 { margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; margin-bottom: 5px; font-size: 14px; }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #444;
+            background-color: #333;
+            color: #fff;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .btn-primary { background-color: #27ae60; color: white; }
+        .btn-danger { background-color: #e74c3c; color: white; }
+        .btn-primary:hover { background-color: #219150; }
+        .btn-danger:hover { background-color: #c0392b; }
+        .hidden { display: none; }
+        .role-box {
+            background-color: #333;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-size: 18px;
+        }
+        .role-title { font-size: 24px; color: #f1c40f; font-weight: bold; }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>おバカ人狼</h1>
 
-        <!-- ロビーパネル -->
-        <div id="lobbyPanel" class="card">
-            <h3>ゲームに参加</h3>
-            <input type="text" id="usernameInput" placeholder="あなたの名前" style="width: 95%; margin-bottom: 10px; padding: 8px;">
-            
-            <button onclick="handleCreateRoom()">部屋を新しく作成</button>
-            <hr style="margin: 15px 0;">
-            
-            <input type="text" id="roomCodeInput" placeholder="部屋コード（4文字）" style="width: 95%; margin-bottom: 10px; padding: 8px;">
-            <button onclick="handleJoinRoom()" style="background-color: #3498db;">部屋に入室</button>
+        <!-- ログイン / 部屋作成画面 -->
+        <div id="setup-screen">
+            <div class="input-group">
+                <label for="player-name">プレイヤー名</label>
+                <input type="text" id="player-name" placeholder="名前を入力">
+            </div>
+            <button class="btn-primary" onclick="handleCreateRoom()">部屋を新しく作成</button>
         </div>
 
-        <!-- メインゲームパネル -->
-        <div id="gamePanel" style="display: none;">
-            <div class="switch-panel">
-                <span>部屋コード: <strong id="displayRoomCode">-</strong></span>
+        <!-- 待機ラウンジ画面 -->
+        <div id="lobby-screen" class="hidden">
+            <h2>部屋コード: <span id="room-code-display"></span></h2>
+            <div class="role-box">
+                あなたの見た目の役職:<br>
+                <span id="displayed-role" class="role-title">未定</span>
             </div>
 
-            <div class="card">
-                <h3>あなたの役職: <span id="roleName" class="role-badge">-</span></h3>
-                <p>現在のフェーズ: <strong id="phaseText">-</strong></p>
-                <p id="statusText"></p>
-                <div id="resultBox" class="result-box" style="display: none;"></div>
+            <!-- ホスト用スタートボタン -->
+            <div id="host-controls" class="hidden">
+                <button class="btn-danger" onclick="handleStartGame()">ゲームを開始する (3人以上)</button>
             </div>
-
-            <div class="card" id="actionCard">
-                <div id="actionArea">
-                    <label for="targetSelect">対象を選択:</label>
-                    <select id="targetSelect"></select>
-                    <button id="actionBtn" onclick="handleActionSubmit()">送信</button>
-                </div>
-                <p id="submittedText" class="submitted-msg" style="display: none;">
-                    行動を受け付けました。他のプレイヤーの完了を待っています...
-                </p>
-            </div>
+            <p id="waiting-message">ホストがゲームを開始するのを待っています...</p>
         </div>
     </div>
 
