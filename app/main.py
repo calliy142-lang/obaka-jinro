@@ -102,7 +102,6 @@ def leave_room(room_code: str, req: ActionRequest):
         if len(rooms[room_code].players) == 0:
             del rooms[room_code]
         else:
-            # ホスト代理昇格
             next_host = list(rooms[room_code].players.values())[0]
             next_host.is_host = True
     return {"message": "退出しました"}
@@ -251,7 +250,7 @@ def send_kill(room_code: str, req: KillRequest):
     check_and_resolve_night(room)
     return {"message": "襲撃ターゲットを設定しました"}
 
-function check_and_resolve_night(room: Room):
+def check_and_resolve_night(room: Room):
     alive_players = [p for p in room.players.values() if p.is_alive]
     if len(room.night_actions) >= len(alive_players):
         resolve_night_phase(room)
