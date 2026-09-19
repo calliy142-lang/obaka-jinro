@@ -7,11 +7,7 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# ---------------------------------------------------------
-# Feign 役職データ定義
-# ---------------------------------------------------------
 ROLES_INFO = {
-    # イノセント陣営
     "バカ": {"camp": "innocent", "can_be_fool": False},
     "ドクター": {"camp": "innocent", "can_be_fool": True},
     "ねずみ": {"camp": "innocent", "can_be_fool": True},
@@ -21,10 +17,8 @@ ROLES_INFO = {
     "インベスティゲーター": {"camp": "innocent", "can_be_fool": True},
     "挑発者": {"camp": "innocent", "can_be_fool": False},
     "トラッカー": {"camp": "innocent", "can_be_fool": True},
-    # インポスター陣営
     "ブレイマー": {"camp": "impostor", "can_be_fool": False},
     "クリーナー": {"camp": "impostor", "can_be_fool": False},
-    # 第三陣営（ニュートラル）
     "シリアルキラー": {"camp": "neutral", "can_be_fool": False},
     "ボマー": {"camp": "neutral", "can_be_fool": False},
     "サバイバー": {"camp": "neutral", "can_be_fool": False},
@@ -38,44 +32,25 @@ class Player:
         self.id = player_id
         self.name = name
         self.is_host = is_host
-        self.real_role = "ドクター"       # 実際の役職
-        self.displayed_role = "ドクター"  # 本人に見えている役職
-        self.camp = "innocent"           # 実際の陣営
-        self.is_fool = False             # バカフラグ
+        self.real_role = "ドクター"
+        self.displayed_role = "ドクター"
+        self.camp = "innocent"
+        self.is_fool = False
         self.is_alive = True
-        
-        # 使用回数制限
         self.role_uses = 999
-        
-        # 状態フラグ
-        self.survivor_shields = 0
-        self.last_visited_house = None
-        self.bombs_planted_on_me = False
-        self.ghost_candle_target = None  # ゴーストがロウソクを置いた対象
-        self.taunted_by = None           # 挑発者から挑発されたか
-        self.extra_votes = 0
 
 class Room:
     def __init__(self, room_code: str):
         self.room_code = room_code
         self.players: Dict[str, Player] = {}
-        self.phase = "lobby"  # lobby -> night -> day -> vote -> result
+        self.phase = "lobby"
         self.day_count = 1
-        self.night_actions: Dict[str, dict] = {} # {player_id: {target_id, extra_param}}
-        self.votes: Dict[str, str] = {}           # {voter_id: target_id}
-        self.night_reports: Dict[str, List[str]] = {} # {player_id: [messages]}
-        self.cleaned_players = set()             # クリーナー対象
-        self.blamed_players = {}                 # ブレイマー対象 {player_id: fake_role}
-        self.planted_bombs = set()               # ボマーが爆弾を掛けた相手
+        self.night_actions: Dict[str, dict] = {}
+        self.votes: Dict[str, str] = {}
+        self.night_reports: Dict[str, List[str]] = {}
         self.result_text = ""
 
 rooms: Dict[str, Room] = {}
-
-# ---------------------------------------------------------
-# API リクエスト/レスポンスモデル
-# ---------------------------------------------------------
-class CreateRoomResponse(BaseModel):
-    room_code: str
 
 class JoinRoomRequest(BaseModel):
     player_name: str
@@ -83,7 +58,7 @@ class JoinRoomRequest(BaseModel):
 class ActionRequest(BaseModel):
     player_id: str
     target_id: Optional[str] = None
-    extra_param: Optional[str] = None  # 魔術師の役職予想など
+    extra_param: Optional[str] = None
 
 class VoteRequest(BaseModel):
     player_id: str
@@ -92,10 +67,7 @@ class VoteRequest(BaseModel):
 class HostStartRequest(BaseModel):
     host_player_id: str
 
-# ---------------------------------------------------------
-# 部屋作成・参加 API
-# ---------------------------------------------------------
-@app.post("/api/room/create", response_model=CreateRoomResponse)
+@app.post("/api/room/create")
 def create_room():
     code = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ", k=4))
     while code in rooms:
@@ -117,9 +89,6 @@ def join_room(room_code: str, req: JoinRoomRequest):
     room.players[player_id] = player
     return {"player_id": player_id, "is_host": is_host}
 
-# ---------------------------------------------------------
-# ゲーム開始 & Feign 配役ロジック
-# ---------------------------------------------------------
 @app.post("/api/room/{room_code}/start")
 def start_game(room_code: str, req: HostStartRequest):
     if room_code not in rooms:
@@ -134,7 +103,6 @@ def start_game(room_code: str, req: HostStartRequest):
     if p_count < 3:
         raise HTTPException(status_code=400, detail="最低3人のプレイヤーが必要です")
 
-    # 配役構成のランダム生成 (インポスター/ニュートラル/イノセント)
     assign_roles_feign(players_list)
 
     room.phase = "night"
@@ -143,7 +111,6 @@ def start_game(room_code: str, req: HostStartRequest):
     return {"message": "ゲームを開始しました"}
 
 def assign_roles_feign(players: List[Player]):
-    # 利用可能な役職プール
     innocent_pool = ["ドクター", "ねずみ", "ポリス", "トラッパー", "ルックアウト", "インベスティゲーター", "挑発者", "トラッカー"]
     impostor_pool = ["ブレイマー", "クリーナー"]
     neutral_pool = ["シリアルキラー", "ボマー", "サバイバー", "シーフ", "魔術師", "ゴースト"]
@@ -151,7 +118,6 @@ def assign_roles_feign(players: List[Player]):
     random.shuffle(players)
     total = len(players)
     
-    # 人数に応じた陣営配分
     imp_count = 1 if total <= 5 else 2
     neu_count = 1 if total >= 6 else 0
     inn_count = total - imp_count - neu_count
@@ -162,11 +128,9 @@ def assign_roles_feign(players: List[Player]):
         chosen_roles.extend(random.sample(neutral_pool, neu_count))
     chosen_roles.extend(random.sample(innocent_pool, inn_count))
 
-    # イノセントの中から1人を「バカ（Feigner）」に決定
     innocent_indices = [i for i, r in enumerate(chosen_roles) if ROLES_INFO[r]["camp"] == "innocent" and ROLES_INFO[r]["can_be_fool"]]
     fool_index = random.choice(innocent_indices) if innocent_indices else -1
 
-    # 各役職の使用回数設定マッピング
     uses_map = {"ねずみ": 1, "挑発者": 2, "ブレイマー": 2, "サバイバー": 3}
 
     for idx, player in enumerate(players):
@@ -176,19 +140,14 @@ def assign_roles_feign(players: List[Player]):
         player.is_fool = False
 
         if idx == fool_index:
-            # バカの場合：見た目は別のイノセント役職に見せかける
             player.is_fool = True
             fake_roles = [r for r in innocent_pool if ROLES_INFO[r]["can_be_fool"]]
             player.displayed_role = random.choice(fake_roles)
         else:
             player.displayed_role = role_name
 
-        # 使用回数の割り当て
         player.role_uses = uses_map.get(player.displayed_role, 999)
 
-# ---------------------------------------------------------
-# ステータス確認 API
-# ---------------------------------------------------------
 @app.get("/api/room/{room_code}/player/{player_id}")
 def get_player_info(room_code: str, player_id: str):
     if room_code not in rooms or player_id not in rooms[room_code].players:
@@ -214,9 +173,6 @@ def get_player_info(room_code: str, player_id: str):
         "result": getattr(room, "result_text", "")
     }
 
-# ---------------------------------------------------------
-# 夜の行動送信 API
-# ---------------------------------------------------------
 @app.post("/api/room/{room_code}/action")
 def send_action(room_code: str, req: ActionRequest):
     room = rooms.get(room_code)
@@ -232,48 +188,39 @@ def send_action(room_code: str, req: ActionRequest):
         "extra_param": req.extra_param
     }
 
-    # 全員が行動完了したら夜フェーズを解決して昼へ
     alive_players = [p for p in room.players.values() if p.is_alive]
     if len(room.night_actions) >= len(alive_players):
         resolve_night_phase(room)
 
     return {"message": "夜の行動を受理しました"}
 
-# ---------------------------------------------------------
-# 夜の処理エンジン（Feign の優先度順解決）
-# ---------------------------------------------------------
 def resolve_night_phase(room: Room):
     actions = room.night_actions
     players = room.players
     room.night_reports = {p_id: [] for p_id in players}
 
-    blocked_players = set() # ポリスやトラップで止められた人
-    trapped_houses = set()  # トラップが仕掛けられた家
-    kills = set()           # 今夜キルされる人
-    healed = set()          # ドクターに助けられた人
+    blocked_players = set()
+    trapped_houses = set()
+    kills = set()
+    healed = set()
 
-    # Step 1: トラッパーのトラップ設置
     for p_id, act in actions.items():
         p = players[p_id]
         if p.real_role == "トラッパー" and not p.is_fool and act["target_id"]:
             trapped_houses.add(act["target_id"])
 
-    # Step 2: ポリス・トラッパーによる行動阻止 (Block)
     for p_id, act in actions.items():
         p = players[p_id]
         target_id = act["target_id"]
         
-        # ポリスの阻止
         if p.real_role == "ポリス" and not p.is_fool and target_id:
             blocked_players.add(target_id)
             room.night_reports[target_id].append("昨夜、ポリスに外出を阻止されました。")
 
-        # トラップにかかる
         if target_id in trapped_houses and p.real_role != "シリアルキラー":
             blocked_players.add(p_id)
             room.night_reports[p_id].append("昨夜、トラップにかかって能力を使用できませんでした。")
 
-    # Step 3: キル・防衛・調査能力の実行
     for p_id, act in actions.items():
         if p_id in blocked_players:
             continue
@@ -282,7 +229,6 @@ def resolve_night_phase(room: Room):
         target_id = act["target_id"]
         target = players.get(target_id) if target_id else None
 
-        # --- イノセント能力 ---
         if p.displayed_role == "ドクター":
             if not p.is_fool and target:
                 healed.add(target_id)
@@ -292,19 +238,10 @@ def resolve_night_phase(room: Room):
         elif p.displayed_role == "インベスティゲーター":
             if target:
                 if p.is_fool:
-                    # バカ：ランダムな偽結果
                     room.night_reports[p_id].append(f"{target.name} は 「ドクター」 または 「ブレイマー」 のどちらかです。")
                 else:
                     room.night_reports[p_id].append(f"{target.name} は 「{target.real_role}」 または 「ブレイマー」 のどちらかです。")
 
-        # --- インポスター能力 ---
-        elif p.real_role == "ブレイマー" and target:
-            room.blamed_players[target_id] = "インポスター"
-
-        elif p.real_role == "クリーナー" and target:
-            room.cleaned_players.add(target_id)
-
-        # --- ニュートラル能力 ---
         elif p.real_role == "シリアルキラー" and target:
             kills.add(target_id)
 
@@ -313,22 +250,17 @@ def resolve_night_phase(room: Room):
             if target.real_role == guess:
                 kills.add(target_id)
             else:
-                kills.add(p_id) # 予想失敗で自爆
+                kills.add(p_id)
 
-    # 死亡処理（ドクター救護の適用）
     final_kills = kills - healed
     for k_id in final_kills:
         players[k_id].is_alive = False
         room.night_reports[k_id].append("あなたは昨夜キルされました。")
 
-    # フェーズ遷移
     room.phase = "day"
     room.night_actions.clear()
     check_win_conditions(room)
 
-# ---------------------------------------------------------
-# 投票 API & 勝敗判定
-# ---------------------------------------------------------
 @app.post("/api/room/{room_code}/vote")
 def send_vote(room_code: str, req: VoteRequest):
     room = rooms.get(room_code)
@@ -372,5 +304,5 @@ def check_win_conditions(room: Room):
         room.phase = "result"
         room.result_text = "💀 インポスター陣営の勝利です！"
 
-# 静的ファイルの配信設定
+# APIより後に静的ファイルをマウント
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
