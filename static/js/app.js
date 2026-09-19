@@ -66,21 +66,22 @@ async function fetchGameStatus() {
         document.getElementById('displayed-role').textContent = info.displayed_role || "未定";
         document.getElementById('phase-display').textContent = getPhaseName(info.phase);
 
-        // フェーズが変わったら画面切り替え
-        if (currentPhase !== info.phase) {
-            currentPhase = info.phase;
-            updatePhaseUI(info);
-        }
-
-        // ホスト用制御ボタン
+        // ホスト判定とボタン制御
         const hostControls = document.getElementById('host-controls');
         const waitingMessage = document.getElementById('waiting-message');
+
         if (info.is_host) {
             hostControls.classList.remove('hidden');
             waitingMessage.classList.add('hidden');
         } else {
             hostControls.classList.add('hidden');
             waitingMessage.classList.remove('hidden');
+        }
+
+        // フェーズが変わったら画面切り替え
+        if (currentPhase !== info.phase) {
+            currentPhase = info.phase;
+            updatePhaseUI(info);
         }
 
     } catch (err) {
@@ -104,18 +105,20 @@ function updatePhaseUI(info) {
     // 全フェーズ非表示
     document.querySelectorAll('.phase-section').forEach(el => el.classList.add('hidden'));
 
-    if (info.phase === 'lobby') {
+    const phase = info.phase || 'lobby';
+
+    if (phase === 'lobby') {
         document.getElementById('lobby-phase').classList.remove('hidden');
-    } else if (info.phase === 'night') {
+    } else if (phase === 'night') {
         document.getElementById('night-phase').classList.remove('hidden');
         populatePlayerDropdown('night-target-select', info.other_players);
-    } else if (info.phase === 'day') {
+    } else if (phase === 'day') {
         document.getElementById('day-phase').classList.remove('hidden');
         renderLivingPlayers(info.other_players);
-    } else if (info.phase === 'vote') {
+    } else if (phase === 'vote') {
         document.getElementById('vote-phase').classList.remove('hidden');
         populatePlayerDropdown('vote-target-select', info.other_players);
-    } else if (info.phase === 'result') {
+    } else if (phase === 'result') {
         document.getElementById('result-phase').classList.remove('hidden');
         if (info.result) {
             document.getElementById('result-content').innerHTML = info.result;

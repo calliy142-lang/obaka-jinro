@@ -51,7 +51,7 @@
         .btn-secondary { background-color: #2980b9; color: white; }
         .btn-danger { background-color: #e74c3c; color: white; }
         .btn-warning { background-color: #f39c12; color: white; }
-        .hidden { display: none; }
+        .hidden { display: none !important; }
         .divider {
             margin: 20px 0;
             border-top: 1px solid #444;
@@ -121,7 +121,7 @@
             <button class="btn-secondary" onclick="handleJoinRoom()">既存の部屋に参加</button>
         </div>
 
-        <!-- 2. ゲーム画面（共通ヘッダー ＋ フェーズ毎の切り替え） -->
+        <!-- 2. ゲーム画面 -->
         <div id="game-screen" class="hidden">
             <div class="status-badge" id="phase-display">待機中</div>
             <h2>部屋コード: <span id="room-code-display"></span></h2>
@@ -133,13 +133,13 @@
 
             <!-- 待機フェーズ -->
             <div id="lobby-phase" class="phase-section">
-                <div id="host-controls" class="hidden">
+                <div id="host-controls">
                     <button class="btn-danger" onclick="handleStartGame()">ゲームを開始する (3人以上)</button>
                 </div>
-                <p id="waiting-message">ホストがゲームを開始するのを待っています...</p>
+                <p id="waiting-message" class="hidden">ホストがゲームを開始するのを待っています...</p>
             </div>
 
-            <!-- 夜フェーズ（アクション） -->
+            <!-- 夜フェーズ -->
             <div id="night-phase" class="phase-section hidden">
                 <h3>🌙 夜の行動</h3>
                 <p>対象のプレイヤーを選択してアクションを実行してください。</p>
