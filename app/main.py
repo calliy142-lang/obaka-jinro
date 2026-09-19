@@ -151,10 +151,13 @@ def assign_roles_feign(players: List[Player]):
 
 @app.get("/api/room/{room_code}/player/{player_id}")
 def get_player_info(room_code: str, player_id: str):
-    if room_code not in rooms or player_id not in rooms[room_code].players:
-        raise HTTPException(status_code=404, detail="プレイヤーが見つかりません")
+    if room_code not in rooms:
+        raise HTTPException(status_code=404, detail="部屋が存在しません")
     
     room = rooms[room_code]
+    if player_id not in room.players:
+        raise HTTPException(status_code=404, detail="プレイヤーが存在しません")
+    
     me = room.players[player_id]
 
     all_p = [{"id": p.id, "name": p.name, "is_host": p.is_host, "is_alive": p.is_alive} for p in room.players.values()]
@@ -292,7 +295,6 @@ def resolve_vote_phase(room: Room):
     else:
         room.last_vote_result = "誰も追放されませんでした。"
 
-    # 追放後に勝敗チェック
     game_over = check_win_conditions(room)
 
     if not game_over:

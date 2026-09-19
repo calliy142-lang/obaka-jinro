@@ -24,9 +24,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (actionBtn) actionBtn.addEventListener('click', handleSendAction);
     if (voteBtn) voteBtn.addEventListener('click', handleSendVote);
 
-    // F5リロード時、すでに部屋に入っていれば状態を再開
+    // ブラウザのリロード時、保存されたIDがあれば復元ポーリングを開始
     if (currentState.roomCode && currentState.playerId) {
         startPolling();
+    } else {
+        showScreen('setup-screen');
     }
 });
 
@@ -75,13 +77,15 @@ async function handleJoinRoom() {
 }
 
 function saveStateToStorage() {
-    localStorage.setItem('roomCode', currentState.roomCode);
-    localStorage.setItem('playerId', currentState.playerId);
+    if (currentState.roomCode) localStorage.setItem('roomCode', currentState.roomCode);
+    if (currentState.playerId) localStorage.setItem('playerId', currentState.playerId);
 }
 
 function clearStateStorage() {
     localStorage.removeItem('roomCode');
     localStorage.removeItem('playerId');
+    currentState.roomCode = null;
+    currentState.playerId = null;
 }
 
 async function handleStartGame() {
@@ -150,10 +154,13 @@ async function updateGameStatus() {
 
         renderUI(data);
     } catch (err) {
-        console.error(err);
-        // 部屋が存在しない場合などはストレージを破棄して戻す
-        clearStateStorage();
-        showScreen('setup-screen');
+        console.error("情報更新エラー:", err);
+        // サーバーが再起動された等で部屋自体が消滅している場合のみクリアして初期化
+        if (err.message && err.message.includes("404")) {
+            clearStateStorage();
+            if (pollInterval) clearInterval(pollInterval);
+            showScreen('setup-screen');
+        }
     }
 }
 
@@ -221,5 +228,5 @@ function updateDayUI(data) {
 function updateResultUI(data) {
     const resEl = document.getElementById('game-result-text');
     if (resEl) resEl.innerText = data.result;
-    clearStateStorage(); // 勝敗が決まったら次回用にリセット
+    clearStateStorage(); // ゲーム決着時のみストレージ破棄
 }
