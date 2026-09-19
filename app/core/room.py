@@ -1,59 +1,52 @@
 import random
-import string
 from typing import Dict, List, Optional
-from fastapi import WebSocket
-from app.core.state import GameState
-from app.core.engine import GameEngine
+from pydantic import BaseModel
 
-class RoomManager:
-    """ルーム全体の管理とWebSocket通信のブロードキャスト制御"""
+# 人数別の配役設定（真の役職）
+ROLE_TABLES = {
+    3: ["IMPOSTER", "DOCTOR", "CITIZEN"],
+    4: ["IMPOSTER", "DOCTOR", "POLICE", "CITIZEN"],
+    5: ["IMPOSTER", "SERIAL_KILLER", "DOCTOR", "POLICE", "CITIZEN"],
+    6: ["IMPOSTER", "SERIAL_KILLER", "DOCTOR", "POLICE", "CITIZEN", "CITIZEN"]
+}
 
-    def __init__(self):
-        self.rooms: Dict[str, GameState] = {}
-        self.engines: Dict[str, GameEngine] = {}
-        self.connections: Dict[str, Dict[str, WebSocket]] = {}  # room_code -> {player_id: websocket}
+# 偽装（見た目）用役職リスト
+DISGUISED_ROLES = ["DOCTOR", "POLICE", "CITIZEN", "INVESTIGATOR", "TRAPPER"]
 
-    def generate_room_code(self) -> str:
-        """4桁の英大文字ルームコードを生成"""
-        while True:
-            code = ''.join(random.choices(string.ascii_uppercase, k=4))
-            if code not in self.rooms:
-                return code
+class Player(BaseModel):
+    id: str
+    name: str
+    role: Optional[str] = None           # 本来の役職
+    displayed_role: Optional[str] = None # 見た目の役職
+    is_alive: bool = True
+    is_host: bool = False
 
-    def create_room(self) -> str:
-        code = self.generate_room_code()
-        state = GameState(session_id=code)
-        self.rooms[code] = state
-        self.engines[code] = GameEngine(state)
-        self.connections[code] = {}
-        return code
+class Room(BaseModel):
+    room_code: str
+    host_id: str
+    players: Dict[str, Player] = {}
+    phase: str = "SETUP"
 
-    def get_room(self, code: str) -> Optional[GameState]:
-        return self.rooms.get(code.upper())
+    def start_game(self, requesting_player_id: str):
+        if requesting_player_id != self.host_id:
+            raise ValueError("ゲームを開始できるのはホストのみです")
 
-    def get_engine(self, code: str) -> Optional[GameEngine]:
-        return self.engines.get(code.upper())
+        count = len(self.players)
+        if count < 3:
+            raise ValueError("ゲームを開始するには最低3名必要です")
 
-    async def connect(self, room_code: str, player_id: str, websocket: WebSocket):
-        await websocket.accept()
-        room_code = room_code.upper()
-        if room_code not in self.connections:
-            self.connections[room_code] = {}
-        self.connections[room_code][player_id] = websocket
+        base_roles = ROLE_TABLES.get(count, ROLE_TABLES[6] + ["CITIZEN"] * (count - 6))
+        
+        shuffled_roles = base_roles.copy()
+        random.shuffle(shuffled_roles)
 
-    def disconnect(self, room_code: str, player_id: str):
-        room_code = room_code.upper()
-        if room_code in self.connections and player_id in self.connections[room_code]:
-            del self.connections[room_code][player_id]
+        for idx, player in enumerate(self.players.values()):
+            real_role = shuffled_roles[idx]
+            player.role = real_role
+            
+            if real_role == "IMPOSTER":
+                player.displayed_role = random.choice(DISGUISED_ROLES)
+            else:
+                player.displayed_role = real_role
 
-    async def notify_room_update(self, room_code: str):
-        """部屋に参加している全プレイヤーに状態更新通知を送信"""
-        room_code = room_code.upper()
-        if room_code in self.connections:
-            for player_id, ws in list(self.connections[room_code].items()):
-                try:
-                    await ws.send_json({"type": "UPDATE"})
-                except Exception:
-                    pass
-
-room_manager = RoomManager()
+        self.phase = "NIGHT"
