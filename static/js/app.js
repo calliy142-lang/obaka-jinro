@@ -2,6 +2,7 @@ let currentRoomCode = null;
 let currentPlayerId = null;
 let pollInterval = null;
 
+// 部屋を新規作成
 async function handleCreateRoom() {
     const nameInput = document.getElementById('player-name').value.trim();
     if (!nameInput) {
@@ -20,6 +21,32 @@ async function handleCreateRoom() {
         startPolling();
     } catch (err) {
         alert("エラーが発生しました: " + err.message);
+    }
+}
+
+// 既存の部屋に参加
+async function handleJoinRoom() {
+    const nameInput = document.getElementById('player-name').value.trim();
+    const roomCodeInput = document.getElementById('room-code-input').value.trim().toUpperCase();
+
+    if (!nameInput) {
+        alert("名前を入力してください");
+        return;
+    }
+    if (!roomCodeInput) {
+        alert("部屋コードを入力してください");
+        return;
+    }
+
+    try {
+        currentRoomCode = roomCodeInput;
+        const joinRes = await API.joinRoom(currentRoomCode, nameInput);
+        currentPlayerId = joinRes.player_id;
+
+        showLobbyScreen();
+        startPolling();
+    } catch (err) {
+        alert("部屋に参加できませんでした: " + err.message);
     }
 }
 

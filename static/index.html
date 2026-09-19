@@ -47,10 +47,27 @@
             font-weight: bold;
         }
         .btn-primary { background-color: #27ae60; color: white; }
+        .btn-secondary { background-color: #2980b9; color: white; }
         .btn-danger { background-color: #e74c3c; color: white; }
         .btn-primary:hover { background-color: #219150; }
+        .btn-secondary:hover { background-color: #1f618d; }
         .btn-danger:hover { background-color: #c0392b; }
         .hidden { display: none; }
+        .divider {
+            margin: 20px 0;
+            border-top: 1px solid #444;
+            position: relative;
+        }
+        .divider-text {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #2a2a2a;
+            padding: 0 10px;
+            color: #888;
+            font-size: 12px;
+        }
         .role-box {
             background-color: #333;
             padding: 15px;
@@ -65,13 +82,24 @@
     <div class="container">
         <h1>おバカ人狼</h1>
 
-        <!-- ログイン / 部屋作成画面 -->
+        <!-- ログイン / 部屋作成・参加画面 -->
         <div id="setup-screen">
             <div class="input-group">
                 <label for="player-name">プレイヤー名</label>
                 <input type="text" id="player-name" placeholder="名前を入力">
             </div>
+
             <button class="btn-primary" onclick="handleCreateRoom()">部屋を新しく作成</button>
+
+            <div class="divider">
+                <span class="divider-text">または</span>
+            </div>
+
+            <div class="input-group">
+                <label for="room-code-input">部屋コード</label>
+                <input type="text" id="room-code-input" placeholder="部屋コードを入力">
+            </div>
+            <button class="btn-secondary" onclick="handleJoinRoom()">既存の部屋に参加</button>
         </div>
 
         <!-- 待機ラウンジ画面 -->
