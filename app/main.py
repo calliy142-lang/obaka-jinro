@@ -70,7 +70,7 @@ class Room:
         self.host_id = None
         self.phase = "SETUP"
         self.day_count = 1
-        self.day_timer = 60
+        self.day_timer = 600
         self.distribution_mode = "individual"
         self.role_distribution = {role: 0 for role in ROLE_CONFIGS}
         self.role_distribution["doctor"] = 1
@@ -98,7 +98,7 @@ class Room:
 
 class SettingsRequest(BaseModel):
     host_player_id: str
-    day_timer: Optional[int] = 60
+    day_timer: Optional[int] = 600
     distribution_mode: Optional[str] = "individual"
     role_distribution: Optional[Dict[str, int]] = None
     faction_distribution: Optional[Dict[str, int]] = None
@@ -1201,7 +1201,7 @@ async def update_settings(room_code: str, req: SettingsRequest):
     if room.phase != "SETUP":
         raise HTTPException(status_code=400, detail="ゲーム開始後は設定できません")
 
-    room.day_timer = max(10, int(req.day_timer or 60))
+    room.day_timer = max(10, min(3600, int(req.day_timer or 600)))
     room.distribution_mode = req.distribution_mode or "individual"
 
     if req.role_distribution is not None:
@@ -1330,6 +1330,16 @@ async def get_player_info(room_code: str, player_id: str):
         "phase": room.phase,
         "day_count": room.day_count,
         "day_timer": room.day_timer,
+
+        "participants": [
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "alive": p["alive"],
+                "is_host": p["is_host"],
+            }
+            for p in room.players.values()
+        ],
 
         "alive": player["alive"],
 

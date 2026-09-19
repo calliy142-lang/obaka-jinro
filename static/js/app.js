@@ -200,6 +200,34 @@ async function handleVoteSubmit() {
     } catch (err) { alert(err.message); }
 }
 
+function renderParticipants(info) {
+    const list = document.getElementById("participantsList");
+    const count = document.getElementById("participantCount");
+    if (!list) return;
+
+    const participants = info.participants || [];
+    if (count) count.innerText = `(${participants.length}人)`;
+    list.innerHTML = "";
+
+    participants.forEach(p => {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid #ddd;border-radius:6px;background:#fafafa;";
+
+        const name = document.createElement("span");
+        name.innerText = p.name + (p.is_host ? " 👑" : "");
+        name.style.fontWeight = p.is_host ? "bold" : "normal";
+
+        const status = document.createElement("span");
+        status.innerText = p.alive ? "生存" : "死亡";
+        status.style.color = p.alive ? "#198754" : "#dc3545";
+        status.style.fontSize = "0.9em";
+
+        row.appendChild(name);
+        row.appendChild(status);
+        list.appendChild(row);
+    });
+}
+
 function resetDayUI() {
     const votedText = document.getElementById("votedText"); if (votedText) votedText.style.display = "none";
 }
@@ -242,6 +270,7 @@ async function updateGameState() {
         document.getElementById("phaseText").innerText = `現在のフェーズ: ${info.phase} / ${info.day_count}日目`;
         const roleName = document.getElementById("roleName"); roleName.innerText = `あなたの役職: ${info.displayed_role}`; roleName.dataset.role = info.displayed_role;
         document.getElementById("statusText").innerText = info.alive ? "状態: 生存" : "状態: 死亡";
+        renderParticipants(info);
         const resultBox = document.getElementById("resultBox");
         if (info.message) { resultBox.innerText = info.message; resultBox.style.display = "block"; }
         renderPrivateReports(info);
