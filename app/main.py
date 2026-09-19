@@ -38,12 +38,19 @@ class Room:
         self.phase = "SETUP"
         self.day_count = 1
         self.day_timer = 60
+        self.distribution_mode = "individual"
         self.role_distribution = {role: 0 for role in ROLE_CONFIGS}
-        # デフォルトで割り当てる基本役職
         self.role_distribution["doctor"] = 1
         self.role_distribution["police"] = 1
         self.role_distribution["investigator"] = 1
         self.role_distribution["imposter"] = 1
+        
+        self.faction_distribution = {
+            "innocent": 2,
+            "imposter": 1,
+            "neutral": 0
+        }
+        
         self.actions = {}
         self.votes = {}
         self.winner_faction = None
@@ -96,8 +103,12 @@ def update_settings(room_code: str, data: dict):
         raise HTTPException(status_code=403, detail="ホストのみ設定を変更できます")
     if "day_timer" in data:
         room.day_timer = int(data["day_timer"])
+    if "distribution_mode" in data:
+        room.distribution_mode = data["distribution_mode"]
     if "role_distribution" in data:
         room.role_distribution = data["role_distribution"]
+    if "faction_distribution" in data:
+        room.faction_distribution = data["faction_distribution"]
     return {"status": "success"}
 
 @app.post("/api/room/{room_code}/start")
@@ -116,18 +127,40 @@ def start_game(room_code: str, data: dict):
         raise HTTPException(status_code=400, detail="ゲームを開始するには最低2人以上のプレイヤーが必要です。")
     
     assigned_roles = []
-    for role, count in room.role_distribution.items():
-        try:
-            cnt = int(count)
-        except (ValueError, TypeError):
-            cnt = 0
-        assigned_roles.extend([role] * cnt)
     
-    all_role_keys = list(ROLE_CONFIGS.keys())
-    while len(assigned_roles) < total_players:
-        assigned_roles.append(random.choice(all_role_keys))
+    if room.distribution_mode == "individual":
+        for role, count in room.role_distribution.items():
+            try:
+                cnt = int(count)
+            except (ValueError, TypeError):
+                cnt = 0
+            assigned_roles.extend([role] * cnt)
         
-    assigned_roles = assigned_roles[:total_players]
+        all_role_keys = list(ROLE_CONFIGS.keys())
+        while len(assigned_roles) < total_players:
+            assigned_roles.append(random.choice(all_role_keys))
+        assigned_roles = assigned_roles[:total_players]
+    
+    else:
+        # 陣営比率モードの場合の割り振り
+        fac_in = room.faction_distribution.get("innocent", 0)
+        fac_imp = room.faction_distribution.get("imposter", 0)
+        fac_neu = room.faction_distribution.get("neutral", 0)
+        
+        innocent_roles = [k for k, v in ROLE_CONFIGS.items() if v["camp"] == "innocent"]
+        imposter_roles = [k for k, v in ROLE_CONFIGS.items() if v["camp"] == "imposter"]
+        neutral_roles = [k for k, v in ROLE_CONFIGS.items() if v["camp"] == "neutral"]
+        
+        for _ in range(fac_in):
+            assigned_roles.append(random.choice(innocent_roles) if innocent_roles else "doctor")
+        for _ in range(fac_imp):
+            assigned_roles.append(random.choice(imposter_roles) if imposter_roles else "imposter")
+        for _ in range(fac_neu):
+            assigned_roles.append(random.choice(neutral_roles) if neutral_roles else "survivor")
+            
+        while len(assigned_roles) < total_players:
+            assigned_roles.append(random.choice(innocent_roles))
+        assigned_roles = assigned_roles[:total_players]
 
     random.shuffle(assigned_roles)
     for idx, pid in enumerate(player_ids):
@@ -166,7 +199,9 @@ def get_player_info(room_code: str, player_id: str):
         "winner_faction": room.winner_faction,
         "message": room.message,
         "is_host": player["is_host"],
-        "role_distribution": room.role_distribution
+        "distribution_mode": room.distribution_mode,
+        "role_distribution": room.role_distribution,
+        "faction_distribution": room.faction_distribution
     }
 
 @app.post("/api/room/{room_code}/action")

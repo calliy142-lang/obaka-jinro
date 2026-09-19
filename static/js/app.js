@@ -1,6 +1,31 @@
 let currentRoomCode = null;
 let currentPlayerId = null;
 let pollInterval = null;
+let currentDistMode = "individual"; // "individual" または "faction"
+
+function switchMode(mode) {
+    currentDistMode = mode;
+    const btnInd = document.getElementById("tabIndividual");
+    const btnFac = document.getElementById("tabFaction");
+    const secInd = document.getElementById("individualSection");
+    const secFac = document.getElementById("factionSection");
+
+    if (mode === "individual") {
+        btnInd.style.background = "#007bff";
+        btnInd.style.color = "white";
+        btnFac.style.background = "#e0e0e0";
+        btnFac.style.color = "#333";
+        secInd.style.display = "block";
+        secFac.style.display = "none";
+    } else {
+        btnFac.style.background = "#007bff";
+        btnFac.style.color = "white";
+        btnInd.style.background = "#e0e0e0";
+        btnInd.style.color = "#333";
+        secFac.style.display = "block";
+        secInd.style.display = "none";
+    }
+}
 
 async function handleCreateRoom() {
     const name = document.getElementById("usernameInput").value.trim();
@@ -65,24 +90,34 @@ function leaveRoom() {
 
 async function handleStartGame() {
     const dayTimer = document.getElementById("dayTimerInput").value;
-    const roleInputs = document.querySelectorAll(".role-input");
-    let roleDistribution = {};
-    
-    roleInputs.forEach(input => {
-        const role = input.dataset.role;
-        const count = parseInt(input.value) || 0;
-        roleDistribution[role] = count;
-    });
+    let settingsPayload = {
+        host_player_id: currentPlayerId,
+        day_timer: dayTimer,
+        distribution_mode: currentDistMode
+    };
+
+    if (currentDistMode === "individual") {
+        const roleInputs = document.querySelectorAll(".role-input");
+        let roleDistribution = {};
+        roleInputs.forEach(input => {
+            const role = input.dataset.role;
+            const count = parseInt(input.value) || 0;
+            roleDistribution[role] = count;
+        });
+        settingsPayload.role_distribution = roleDistribution;
+    } else {
+        settingsPayload.faction_distribution = {
+            innocent: parseInt(document.getElementById("factionInnocent").value) || 0,
+            imposter: parseInt(document.getElementById("factionImposter").value) || 0,
+            neutral: parseInt(document.getElementById("factionNeutral").value) || 0
+        };
+    }
 
     try {
         await fetch(`/api/room/${currentRoomCode}/settings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                host_player_id: currentPlayerId,
-                day_timer: dayTimer,
-                role_distribution: roleDistribution
-            })
+            body: JSON.stringify(settingsPayload)
         });
 
         const res = await fetch(`/api/room/${currentRoomCode}/start`, {
