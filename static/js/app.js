@@ -1,7 +1,15 @@
-let currentRoomCode = null;
-let currentPlayerId = null;
+let currentRoomCode = localStorage.getItem('feign_room_code') || null;
+let currentPlayerId = localStorage.getItem('feign_player_id') || null;
 let pollInterval = null;
 let currentPhase = null;
+
+// ページ読み込み時にセッションが残っていれば自動復帰
+window.addEventListener('DOMContentLoaded', () => {
+    if (currentRoomCode && currentPlayerId) {
+        showGameScreen();
+        startPolling();
+    }
+});
 
 // 部屋作成
 async function handleCreateRoom() {
@@ -14,6 +22,10 @@ async function handleCreateRoom() {
 
         const joinRes = await API.joinRoom(currentRoomCode, nameInput);
         currentPlayerId = joinRes.player_id;
+
+        // ブラウザ更新対策に保存
+        localStorage.setItem('feign_room_code', currentRoomCode);
+        localStorage.setItem('feign_player_id', currentPlayerId);
 
         showGameScreen();
         startPolling();
@@ -34,6 +46,10 @@ async function handleJoinRoom() {
         currentRoomCode = roomCodeInput;
         const joinRes = await API.joinRoom(currentRoomCode, nameInput);
         currentPlayerId = joinRes.player_id;
+
+        // ブラウザ更新対策に保存
+        localStorage.setItem('feign_room_code', currentRoomCode);
+        localStorage.setItem('feign_player_id', currentPlayerId);
 
         showGameScreen();
         startPolling();
@@ -65,7 +81,7 @@ async function fetchGameStatus() {
         document.getElementById('displayed-role').textContent = info.displayed_role || "未定";
         document.getElementById('phase-display').textContent = getPhaseName(info.phase);
 
-        // 2. ホストボタンの固定制御（消えないように修正）
+        // 2. ホストボタンの制御
         const hostControls = document.getElementById('host-controls');
         const waitingMessage = document.getElementById('waiting-message');
 
@@ -78,7 +94,7 @@ async function fetchGameStatus() {
         }
 
         // 3. 待機中のプレイヤー一覧
-        if (info.phase === 'lobby' && info.all_players) {
+        if ((info.phase === 'lobby' || info.phase === 'setup' || !info.phase) && info.all_players) {
             renderLobbyPlayers(info.all_players);
         }
 
@@ -95,23 +111,25 @@ async function fetchGameStatus() {
 
 function getPhaseName(phase) {
     const phaseNames = {
+        'setup': 'ロビー待機中',
         'lobby': 'ロビー待機中',
         'night': '夜（行動選択）',
         'day': '昼（話し合い）',
         'vote': '投票中',
         'result': '勝敗発表'
     };
-    return phaseNames[phase] || phase;
+    return phaseNames[phase] || phase || 'ロビー待機中';
 }
 
 // 各フェーズ画面の表示切り替え
 function updatePhaseUI(info) {
-    const phase = info.phase || 'lobby';
+    const phase = info.phase || 'setup';
 
     // 一旦すべてのフェーズ要素を隠す
     document.querySelectorAll('.phase-section').forEach(el => el.classList.add('hidden'));
 
-    if (phase === 'lobby') {
+    // setup もしくは lobby の場合はロビー画面を表示
+    if (phase === 'lobby' || phase === 'setup') {
         document.getElementById('lobby-phase').classList.remove('hidden');
     } else if (phase === 'night') {
         document.getElementById('night-phase').classList.remove('hidden');
@@ -120,7 +138,6 @@ function updatePhaseUI(info) {
         
         populatePlayerDropdown('night-target-select', info.other_players);
         
-        // 魔術師などの特殊入力
         if (info.displayed_role === '魔術師') {
             document.getElementById('extra-action-input').classList.remove('hidden');
         } else {
@@ -131,7 +148,6 @@ function updatePhaseUI(info) {
         document.getElementById('day-phase').classList.remove('hidden');
         renderLivingPlayers(info.other_players);
         
-        // 夜の報告事項表示
         const nightResults = document.getElementById('night-results');
         if (info.night_report) {
             nightResults.innerHTML = info.night_report;
@@ -153,7 +169,6 @@ function updatePhaseUI(info) {
     }
 }
 
-// ドロップダウン更新
 function populatePlayerDropdown(selectId, players) {
     const select = document.getElementById(selectId);
     select.innerHTML = '';
@@ -167,7 +182,6 @@ function populatePlayerDropdown(selectId, players) {
     });
 }
 
-// ロビー用プレイヤー一覧
 function renderLobbyPlayers(players) {
     const container = document.getElementById('lobby-players-list');
     container.innerHTML = '';
@@ -179,7 +193,6 @@ function renderLobbyPlayers(players) {
     });
 }
 
-// 生存者一覧
 function renderLivingPlayers(players) {
     const container = document.getElementById('living-players-list');
     container.innerHTML = '<strong>生存プレイヤー:</strong>';
@@ -193,7 +206,6 @@ function renderLivingPlayers(players) {
     });
 }
 
-// ゲーム開始
 async function handleStartGame() {
     try {
         const res = await fetch(`/api/room/${currentRoomCode}/start`, {
@@ -209,7 +221,6 @@ async function handleStartGame() {
     }
 }
 
-// 夜アクション送信
 async function handleSendAction() {
     const targetId = document.getElementById('night-target-select').value;
     if (!targetId) return alert("対象を選択してください");
@@ -225,7 +236,6 @@ async function handleSendAction() {
     }
 }
 
-// 投票送信
 async function handleSendVote() {
     const targetId = document.getElementById('vote-target-select').value;
     if (!targetId) return alert("対象を選択してください");
