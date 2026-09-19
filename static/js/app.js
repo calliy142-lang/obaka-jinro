@@ -1,264 +1,169 @@
-let currentState = {
-    roomCode: localStorage.getItem('roomCode') || null,
-    playerId: localStorage.getItem('playerId') || null,
-    isHost: false,
-    phase: 'lobby',
-    displayedRole: '',
-    camp: '',
-    isAlive: true
-};
-
-let pollInterval = null;
-
-const createRoomBtn = document.getElementById('create-room-btn');
-const joinRoomBtn = document.getElementById('join-room-btn');
-const startBtn = document.getElementById('start-game-btn');
-const leaveBtn = document.getElementById('leave-room-btn');
-const actionBtn = document.getElementById('send-action-btn');
-const killBtn = document.getElementById('send-kill-btn');
-const voteBtn = document.getElementById('send-vote-btn');
-const returnLobbyBtn = document.getElementById('return-lobby-btn');
-const resultLeaveBtn = document.getElementById('result-leave-btn');
-
-// モーダル関連要素
-const guideModal = document.getElementById('guide-modal');
-const openGuideBtn = document.getElementById('open-guide-btn');
-const openGuideBtnNight = document.getElementById('open-guide-btn-night');
-const closeGuideBtn = document.getElementById('close-guide-btn');
-
-document.addEventListener('DOMContentLoaded', () => {
-    if (createRoomBtn) createRoomBtn.addEventListener('click', handleCreateRoom);
-    if (joinRoomBtn) joinRoomBtn.addEventListener('click', handleJoinRoom);
-    if (startBtn) startBtn.addEventListener('click', handleStartGame);
-    if (leaveBtn) leaveBtn.addEventListener('click', handleLeaveRoom);
-    if (actionBtn) actionBtn.addEventListener('click', handleSendAction);
-    if (killBtn) killBtn.addEventListener('click', handleSendKill);
-    if (voteBtn) voteBtn.addEventListener('click', handleSendVote);
-    if (returnLobbyBtn) returnLobbyBtn.addEventListener('click', handleReturnLobby);
-    if (resultLeaveBtn) resultLeaveBtn.addEventListener('click', handleLeaveRoom);
-
-    // モーダル表示イベント
-    if (openGuideBtn) openGuideBtn.onclick = () => guideModal.style.display = 'block';
-    if (openGuideBtnNight) openGuideBtnNight.onclick = () => guideModal.style.display = 'block';
-    if (closeGuideBtn) closeGuideBtn.onclick = () => guideModal.style.display = 'none';
-    window.onclick = (e) => { if (e.target === guideModal) guideModal.style.display = 'none'; };
-
-    if (currentState.roomCode && currentState.playerId) {
-        startPolling();
-    } else {
-        showScreen('setup-screen');
-    }
-});
+let currentRoomCode = null;
+let currentPlayerId = null;
+let socket = null;
+let pollTimer = null;
 
 async function handleCreateRoom() {
-    const playerName = document.getElementById('player-name-input').value.trim();
-    if (!playerName) return alert("名前を入力してください");
-
+    const name = document.getElementById('usernameInput').value.trim();
+    if (!name) return alert("名前を入力してください");
     try {
-        const createRes = await API.createRoom();
-        currentState.roomCode = createRes.room_code;
-        const joinRes = await API.joinRoom(currentState.roomCode, playerName);
-        currentState.playerId = joinRes.player_id;
-        currentState.isHost = joinRes.is_host;
-        saveStateToStorage();
+        const roomRes = await API.createRoom();
+        const joinRes = await API.joinRoom(roomRes.room_code, name);
+        currentRoomCode = joinRes.room_code;
+        currentPlayerId = joinRes.player_id;
+        setupWebSocket();
         startPolling();
-    } catch (err) { alert(err.message); }
+        showGameView();
+        await updatePlayerUI();
+    } catch (err) {
+        alert(err.message);
+    }
 }
 
 async function handleJoinRoom() {
-    const roomCode = document.getElementById('room-code-input').value.trim().toUpperCase();
-    const playerName = document.getElementById('player-name-input').value.trim();
-    if (!roomCode || !playerName) return alert("部屋コードと名前を入力してください");
-
+    const name = document.getElementById('usernameInput').value.trim();
+    const code = document.getElementById('roomCodeInput').value.trim().toUpperCase();
+    if (!name || !code) return alert("名前と部屋コードを入力してください");
     try {
-        const joinRes = await API.joinRoom(roomCode, playerName);
-        currentState.roomCode = roomCode;
-        currentState.playerId = joinRes.player_id;
-        currentState.isHost = joinRes.is_host;
-        saveStateToStorage();
+        const joinRes = await API.joinRoom(code, name);
+        currentRoomCode = joinRes.room_code;
+        currentPlayerId = joinRes.player_id;
+        setupWebSocket();
         startPolling();
-    } catch (err) { alert(err.message); }
-}
-
-async function handleLeaveRoom() {
-    if (currentState.roomCode && currentState.playerId) {
-        try {
-            await fetch(`/api/room/${currentState.roomCode}/leave`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ player_id: currentState.playerId })
-            });
-        } catch(e){}
+        showGameView();
+        await updatePlayerUI();
+    } catch (err) {
+        alert(err.message);
     }
-    clearStateStorage();
-    if (pollInterval) clearInterval(pollInterval);
-    showScreen('setup-screen');
 }
 
-async function handleReturnLobby() {
+function setupWebSocket() {
     try {
-        await fetch(`/api/room/${currentState.roomCode}/return_lobby`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ player_id: currentState.playerId })
-        });
-    } catch (err) { alert(err.message); }
-}
-
-function saveStateToStorage() {
-    localStorage.setItem('roomCode', currentState.roomCode);
-    localStorage.setItem('playerId', currentState.playerId);
-}
-
-function clearStateStorage() {
-    localStorage.removeItem('roomCode');
-    localStorage.removeItem('playerId');
-    currentState.roomCode = null;
-    currentState.playerId = null;
-}
-
-async function handleStartGame() {
-    const impCount = parseInt(document.getElementById('setting-impostors').value) || 1;
-    const neuCount = parseInt(document.getElementById('setting-neutrals').value) || 0;
-    const guaranteeFool = document.getElementById('setting-guarantee-fool').checked;
-    const selectedRoles = Array.from(document.querySelectorAll('.innocent-role-cb:checked')).map(cb => cb.value);
-
-    try {
-        await fetch(`/api/room/${currentState.roomCode}/start`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                host_player_id: currentState.playerId,
-                impostor_count: impCount,
-                neutral_count: neuCount,
-                guarantee_fool: guaranteeFool,
-                selected_roles: selectedRoles
-            })
-        });
-    } catch (err) { alert(err.message); }
-}
-
-async function handleSendAction() {
-    const targetSelect = document.getElementById('action-target-select');
-    const extraInput = document.getElementById('action-extra-input');
-    try {
-        await API.sendAction(currentState.roomCode, currentState.playerId, targetSelect ? targetSelect.value : null, extraInput ? extraInput.value : null);
-        alert("行動完了");
-    } catch (err) { alert(err.message); }
-}
-
-async function handleSendKill() {
-    const killSelect = document.getElementById('kill-target-select');
-    try {
-        await fetch(`/api/room/${currentState.roomCode}/kill`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ player_id: currentState.playerId, target_id: killSelect.value })
-        });
-        alert("襲撃ターゲット選択完了");
-    } catch (err) { alert(err.message); }
-}
-
-async function handleSendVote() {
-    const voteSelect = document.getElementById('vote-target-select');
-    if (!voteSelect.value) return alert("投票先を選んでください");
-    try {
-        await API.sendVote(currentState.roomCode, currentState.playerId, voteSelect.value);
-        alert("投票完了");
-    } catch (err) { alert(err.message); }
+        const isHttps = window.location.protocol === 'https:';
+        const wsProtocol = isHttps ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws/${currentRoomCode}/${currentPlayerId}`;
+        socket = new WebSocket(wsUrl);
+        socket.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'UPDATE') {
+                await updatePlayerUI();
+            }
+        };
+    } catch (e) {
+        console.warn("WebSocket初期化失敗:", e);
+    }
 }
 
 function startPolling() {
-    if (pollInterval) clearInterval(pollInterval);
-    updateGameStatus();
-    pollInterval = setInterval(updateGameStatus, 2000);
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+        await updatePlayerUI();
+    }, 2000);
 }
 
-async function updateGameStatus() {
-    if (!currentState.roomCode || !currentState.playerId) return;
+function showGameView() {
+    document.getElementById('lobbyPanel').style.display = 'none';
+    document.getElementById('gamePanel').style.display = 'block';
+    document.getElementById('displayRoomCode').innerText = currentRoomCode;
+}
+
+async function updatePlayerUI() {
+    if (!currentRoomCode || !currentPlayerId) return;
     try {
-        const data = await API.getPlayerInfo(currentState.roomCode, currentState.playerId);
-        currentState.phase = data.phase;
-        currentState.displayedRole = data.displayed_role;
-        currentState.camp = data.camp;
-        currentState.isAlive = data.is_alive;
-        currentState.isHost = data.is_host;
-        renderUI(data);
-    } catch (err) {
-        if (err.message && err.message.includes("404")) handleLeaveRoom();
-    }
-}
-
-function renderUI(data) {
-    ['setup-screen', 'lobby-screen', 'night-screen', 'day-screen', 'result-screen'].forEach(s => {
-        document.getElementById(s).style.display = 'none';
-    });
-
-    if (data.phase === 'lobby') {
-        showScreen('lobby-screen');
-        document.getElementById('display-room-code').innerText = currentState.roomCode;
-        document.getElementById('player-list').innerHTML = data.all_players.map(p => `<li>${p.name} ${p.is_host ? '(ホスト)' : ''}</li>`).join('');
+        const data = await API.getPlayerInfo(currentRoomCode, currentPlayerId);
+        document.getElementById('roleName').innerText = data.displayed_role;
+        document.getElementById('phaseText').innerText = formatPhase(data.phase, data.day_count);
         
-        const hostSettings = document.getElementById('host-settings');
-        if (startBtn) startBtn.style.display = data.is_host ? 'inline-block' : 'none';
-        if (hostSettings) hostSettings.style.display = data.is_host ? 'block' : 'none';
-
-    } else if (data.phase === 'night') {
-        showScreen('night-screen');
-        document.getElementById('my-role-display').innerText = data.displayed_role;
+        const statusElem = document.getElementById('statusText');
+        statusElem.innerHTML = data.alive ? '状態: <span class="status-alive">生存</span>' : '状態: <span class="status-dead">死亡</span>';
         
-        const actionSection = document.getElementById('action-section');
-        const killSection = document.getElementById('kill-section');
-
-        if (!data.is_alive) {
-            actionSection.innerHTML = "<p style='color:red; font-weight:bold;'>あなたは死亡しています（観戦中...）</p>";
-            killSection.style.display = 'none';
+        const resultBox = document.getElementById('resultBox');
+        if (data.message) {
+            resultBox.style.display = 'block';
+            resultBox.innerText = `結果: ${data.message}`;
         } else {
-            document.getElementById('action-target-select').innerHTML = data.other_players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-            if (data.camp === 'impostor') {
-                killSection.style.display = 'block';
-                document.getElementById('kill-target-select').innerHTML = data.other_players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            resultBox.style.display = 'none';
+        }
+
+        if (data.winner_faction) {
+            alert(`ゲーム終了！ 勝利陣営: ${data.winner_faction}`);
+        }
+
+        const targetSelect = document.getElementById('targetSelect');
+        targetSelect.innerHTML = '';
+        data.targets.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            targetSelect.appendChild(opt);
+        });
+
+        const actionArea = document.getElementById('actionArea');
+        const submittedText = document.getElementById('submittedText');
+        const actionBtn = document.getElementById('actionBtn');
+
+        if (!data.alive || data.phase === 'ENDED') {
+            actionArea.style.display = 'none';
+            submittedText.style.display = 'none';
+            return;
+        }
+
+        if (data.action_submitted) {
+            actionArea.style.display = 'none';
+            submittedText.style.display = 'block';
+        } else {
+            actionArea.style.display = 'block';
+            submittedText.style.display = 'none';
+            if (data.phase === 'NIGHT') {
+                actionBtn.innerText = '夜の能力を使用する（パス可能）';
+            } else if (data.phase === 'VOTE') {
+                actionBtn.innerText = 'このプレイヤーに投票する';
             } else {
-                killSection.style.display = 'none';
+                actionArea.style.display = 'none';
             }
         }
-    } else if (data.phase === 'day' || data.phase === 'vote') {
-        showScreen('day-screen');
-        document.getElementById('night-report-box').innerHTML = data.night_report || "昨夜は報告がありません。";
-        
-        const voteTargetSelect = document.getElementById('vote-target-select');
-        const sendVoteBtn = document.getElementById('send-vote-btn');
-        const voteLabel = document.querySelectorAll('#day-screen label')[0];
-
-        if (!data.is_alive) {
-            if (voteTargetSelect) voteTargetSelect.style.display = 'none';
-            if (sendVoteBtn) sendVoteBtn.style.display = 'none';
-            if (voteLabel) voteLabel.innerText = "あなたは死亡しています（観戦中...）";
-        } else {
-            if (voteTargetSelect) {
-                voteTargetSelect.style.display = 'block';
-                voteTargetSelect.innerHTML = data.other_players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-            }
-            if (sendVoteBtn) sendVoteBtn.style.display = 'inline-block';
-            if (voteLabel) voteLabel.innerText = "追放するプレイヤーを選択:";
-        }
-    } else if (data.phase === 'result') {
-        showScreen('result-screen');
-        document.getElementById('game-result-text').innerText = data.result;
-        
-        const tbody = document.getElementById('roles-summary-body');
-        tbody.innerHTML = (data.roles_summary || []).map(r => `
-            <tr>
-                <td>${r.name}</td>
-                <td>${r.displayed_role}</td>
-                <td>${r.real_role}</td>
-                <td>${r.camp_name}</td>
-            </tr>
-        `).join('');
+    } catch (err) {
+        console.error(err);
     }
 }
 
-function showScreen(id) {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'block';
+function formatPhase(phase, dayCount) {
+    switch (phase) {
+        case 'NIGHT': return `${dayCount}日目 - 夜`;
+        case 'DAY': return `${dayCount}日目 - 昼（議論・タイマー進行）`;
+        case 'VOTE': return `${dayCount}日目 - 投票（過半数以上で追放）`;
+        case 'ENDED': return 'ゲーム終了';
+        default: return phase;
+    }
+}
+
+async function handleActionSubmit() {
+    const targetId = document.getElementById('targetSelect').value;
+    const data = await API.getPlayerInfo(currentRoomCode, currentPlayerId);
+    try {
+        if (data.phase === 'NIGHT') {
+            await API.sendAction(currentRoomCode, currentPlayerId, targetId);
+        } else if (data.phase === 'VOTE') {
+            await API.sendVote(currentRoomCode, currentPlayerId, targetId);
+        }
+        await updatePlayerUI();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function handleStartGame() {
+    try {
+        const res = await fetch(`/api/room/${currentRoomCode}/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ host_player_id: currentPlayerId })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            alert(err.detail || "開始に失敗しました");
+        }
+    } catch (e) {
+        alert("通信エラーが発生しました");
+    }
 }
