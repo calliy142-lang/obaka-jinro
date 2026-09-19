@@ -40,7 +40,7 @@
         .btn-danger:hover { background-color: #c82333; }
         .btn-secondary { background-color: #6c757d; color: white; }
         .btn-secondary:hover { background-color: #5a6268; }
-        select, input {
+        select, input[type="text"] {
             padding: 10px;
             margin: 8px 0;
             width: 100%;
@@ -54,6 +54,7 @@
         th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; }
         th { background-color: #e9ecef; }
         .setting-group { margin: 12px 0; padding: 10px; background: #f8f9fa; border-radius: 6px; }
+        .role-checkboxes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -80,12 +81,11 @@
 
             <!-- ホスト用設定エリア -->
             <div id="host-settings" class="setting-group" style="display: none;">
-                <h3>役職人数設定</h3>
+                <h3>ゲーム設定</h3>
                 <label>インポスター人数:
                     <select id="setting-impostors">
                         <option value="1">1名</option>
                         <option value="2">2名</option>
-                        <option value="3">3名</option>
                     </select>
                 </label>
                 <label>第三陣営人数:
@@ -95,6 +95,18 @@
                         <option value="2">2名</option>
                     </select>
                 </label>
+
+                <h4 style="margin-bottom: 4px;">登場させるイノセント役職を選択:</h4>
+                <div class="role-checkboxes">
+                    <label><input type="checkbox" class="innocent-role-cb" value="ドクター" checked> ドクター</label>
+                    <label><input type="checkbox" class="innocent-role-cb" value="ねずみ" checked> ねずみ</label>
+                    <label><input type="checkbox" class="innocent-role-cb" value="ポリス" checked> ポリス</label>
+                    <label><input type="checkbox" class="innocent-role-cb" value="トラッパー" checked> トラッパー</label>
+                    <label><input type="checkbox" class="innocent-role-cb" value="ルックアウト" checked> ルックアウト</label>
+                    <label><input type="checkbox" class="innocent-role-cb" value="インベスティゲーター" checked> インベスティゲーター</label>
+                    <label><input type="checkbox" class="innocent-role-cb" value="挑発者" checked> 挑発者</label>
+                    <label><input type="checkbox" class="innocent-role-cb" value="トラッカー" checked> トラッカー</label>
+                </div>
             </div>
 
             <button id="start-game-btn" class="btn-success" style="display: none;">ゲームを開始</button>

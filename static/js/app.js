@@ -109,6 +109,8 @@ async function handleStartGame() {
     const impCount = parseInt(document.getElementById('setting-impostors').value) || 1;
     const neuCount = parseInt(document.getElementById('setting-neutrals').value) || 0;
 
+    const selectedRoles = Array.from(document.querySelectorAll('.innocent-role-cb:checked')).map(cb => cb.value);
+
     try {
         await fetch(`/api/room/${currentState.roomCode}/start`, {
             method: 'POST',
@@ -116,7 +118,8 @@ async function handleStartGame() {
             body: JSON.stringify({
                 host_player_id: currentState.playerId,
                 impostor_count: impCount,
-                neutral_count: neuCount
+                neutral_count: neuCount,
+                selected_roles: selectedRoles
             })
         });
     } catch (err) { alert(err.message); }
