@@ -20,7 +20,11 @@
 
         <!-- ゲーム画面 -->
         <div id="gamePanel" style="display:none;">
-            <h2>部屋コード: <span id="displayRoomCode" style="color: #007bff;"></span></h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 10px;">
+                <h2 style="margin: 0;">部屋コード: <span id="displayRoomCode" style="color: #007bff;"></span></h2>
+                <button onclick="leaveRoom()" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">部屋から出る</button>
+            </div>
+            
             <div id="phaseText" style="font-weight: bold; color: #333; margin-bottom: 5px;"></div>
             <div id="roleName" style="font-size: 1.2em; color: #007bff; margin-bottom: 5px;"></div>
             <div id="statusText" style="margin-bottom: 10px;"></div>
@@ -28,9 +32,9 @@
             <!-- 結果メッセージ -->
             <div id="resultBox" style="background: #f8f9fa; border: 1px solid #ccc; padding: 10px; border-radius: 4px; margin-bottom: 15px; display:none;"></div>
 
-            <!-- ホスト専用設定（グリッドレイアウト） -->
+            <!-- ホスト専用設定 -->
             <div id="hostControls" style="display:none; border: 2px solid #007bff; border-radius: 8px; padding: 15px; margin-top: 15px; background: #fff;">
-                <h3 style="margin-top: 0; color: #007bff;">ホストルーム設定</h3>
+                <h3 style="margin-top: 0; color: #007bff;">ホストルーム設定 (最低2人必要)</h3>
                 <div style="margin-bottom: 15px;">
                     <label>昼の制限時間（秒）: <input type="number" id="dayTimerInput" value="60" min="10" max="300" style="width: 80px; padding: 4px;"></label>
                 </div>
@@ -60,12 +64,12 @@
                 <button onclick="handleStartGame()" style="background: #28a745; color: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 4px; cursor: pointer; width: 100%;">ゲームスタート</button>
             </div>
 
-            <!-- アクション・投票エリア -->
+            <!-- アクションエリア -->
             <div id="actionArea" style="margin-top: 20px; display:none;">
                 <select id="targetSelect" style="padding: 6px; margin-right: 8px;"></select>
                 <button id="actionBtn" onclick="handleActionSubmit()" style="padding: 6px 14px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">実行する</button>
             </div>
-            <div id="submittedText" style="color: green; font-weight: bold; margin-top: 10px; display:none;">アクション・投票を受け付けました。他のプレイヤーを待っています...</div>
+            <div id="submittedText" style="color: green; font-weight: bold; margin-top: 10px; display:none;">アクションを受け付けました。他のプレイヤーを待っています...</div>
         </div>
     </div>
     <script src="/static/js/api.js"></script>

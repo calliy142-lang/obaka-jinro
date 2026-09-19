@@ -111,7 +111,10 @@ def start_game(room_code: str, data: dict):
     player_ids = list(room.players.keys())
     total_players = len(player_ids)
     
-    # 1. ユーザーが設定画面で指定した数を優先的に組み込む
+    # 1人での開始を禁止するガード
+    if total_players < 2:
+        raise HTTPException(status_code=400, detail="ゲームを開始するには最低2人以上のプレイヤーが必要です。")
+    
     assigned_roles = []
     for role, count in room.role_distribution.items():
         try:
@@ -120,12 +123,10 @@ def start_game(room_code: str, data: dict):
             cnt = 0
         assigned_roles.extend([role] * cnt)
     
-    # 2. プレイヤー数に足りない分を全17役職の中からランダムに補う
     all_role_keys = list(ROLE_CONFIGS.keys())
     while len(assigned_roles) < total_players:
         assigned_roles.append(random.choice(all_role_keys))
         
-    # 3. 指定数が多すぎてプレイヤー数を超えていたら調整
     assigned_roles = assigned_roles[:total_players]
 
     random.shuffle(assigned_roles)
