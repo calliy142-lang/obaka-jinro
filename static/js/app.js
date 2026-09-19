@@ -13,9 +13,9 @@ async function handleCreateRoom() {
         
         currentRoomCode = joinRes.room_code;
         currentPlayerId = joinRes.player_id;
-        
+
         setupWebSocket();
-        startPolling(); // WebSocketが切れた場合の保険（定期通信）
+        startPolling();
         showGameView();
         await updatePlayerUI();
     } catch (err) {
@@ -30,11 +30,12 @@ async function handleJoinRoom() {
 
     try {
         const joinRes = await API.joinRoom(code, name);
+        
         currentRoomCode = joinRes.room_code;
         currentPlayerId = joinRes.player_id;
 
         setupWebSocket();
-        startPolling(); // WebSocketが切れた場合の保険（定期通信）
+        startPolling();
         showGameView();
         await updatePlayerUI();
     } catch (err) {
@@ -44,7 +45,6 @@ async function handleJoinRoom() {
 
 function setupWebSocket() {
     try {
-        // https経由ならwss://、http経由ならws://を正確に設定
         const isHttps = window.location.protocol === 'https:';
         const wsProtocol = isHttps ? 'wss:' : 'ws:';
         const wsUrl = `${wsProtocol}//${window.location.host}/ws/${currentRoomCode}/${currentPlayerId}`;
@@ -66,7 +66,6 @@ function setupWebSocket() {
     }
 }
 
-// WebSocketがブロックされた場合の保険（2秒ごとに自動更新）
 function startPolling() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(async () => {
@@ -85,14 +84,12 @@ async function updatePlayerUI() {
 
     try {
         const data = await API.getPlayerInfo(currentRoomCode, currentPlayerId);
-        
+
         document.getElementById('roleName').innerText = data.displayed_role;
         document.getElementById('phaseText').innerText = formatPhase(data.phase, data.day_count);
 
         const statusElem = document.getElementById('statusText');
-        statusElem.innerHTML = data.alive 
-            ? '状態: <span class="status-alive">生存</span>' 
-            : '状態: <span class="status-dead">死亡</span>';
+        statusElem.innerHTML = data.alive ? '状態: <span class="status-alive">生存</span>' : '状態: <span class="status-dead">死亡</span>';
 
         const resultBox = document.getElementById('resultBox');
         if (data.message) {
@@ -122,6 +119,7 @@ async function updatePlayerUI() {
         if (!data.alive || data.phase === 'ENDED') {
             actionArea.style.display = 'none';
             submittedText.style.display = 'none';
+            checkHostButton(data);
             return;
         }
 
@@ -140,6 +138,10 @@ async function updatePlayerUI() {
                 actionArea.style.display = 'none';
             }
         }
+
+        // ホスト用スタートボタンの表示判定を呼び出し
+        checkHostButton(data);
+
     } catch (err) {
         console.error(err);
     }
@@ -147,6 +149,7 @@ async function updatePlayerUI() {
 
 function formatPhase(phase, dayCount) {
     switch (phase) {
+        case 'SETUP': return '待機中（SETUP）';
         case 'NIGHT': return `${dayCount}日目 - 夜`;
         case 'DAY': return `${dayCount}日目 - 昼（議論）`;
         case 'VOTE': return `${dayCount}日目 - 投票`;
@@ -168,5 +171,32 @@ async function handleActionSubmit() {
         await updatePlayerUI();
     } catch (err) {
         alert(err.message);
+    }
+}
+
+async function handleStartGame() {
+    try {
+        const res = await fetch(`/api/room/${currentRoomCode}/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ host_player_id: currentPlayerId })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            alert(err.detail || "開始に失敗しました");
+        }
+    } catch (e) {
+        alert("通信エラーが発生しました");
+    }
+}
+
+function checkHostButton(data) {
+    const hostControls = document.getElementById('hostControls');
+    if (hostControls) {
+        if (data.is_host && data.phase === 'SETUP') {
+            hostControls.style.display = 'block';
+        } else {
+            hostControls.style.display = 'none';
+        }
     }
 }
