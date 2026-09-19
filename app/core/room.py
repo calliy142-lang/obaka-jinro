@@ -50,3 +50,18 @@ class Room(BaseModel):
                 player.displayed_role = real_role
 
         self.phase = "NIGHT"
+
+class RoomManager:
+    def __init__(self):
+        self.rooms: Dict[str, Room] = {}
+
+    def get_room(self, code: str) -> Optional[Room]:
+        return self.rooms.get(code)
+
+    def create_room(self, code: str, host_id: str) -> Room:
+        room = Room(room_code=code, host_id=host_id)
+        self.rooms[code] = room
+        return room
+
+# 他のファイル（routes.py）が読み込んでいるインスタンス
+room_manager = RoomManager()
