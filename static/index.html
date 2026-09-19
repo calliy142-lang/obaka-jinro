@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>おバカ人狼</title>
+    <title>Feign (バカ人狼)</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -20,7 +20,7 @@
             padding: 30px;
             border-radius: 10px;
             width: 100%;
-            max-width: 450px;
+            max-width: 480px;
             text-align: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
@@ -91,7 +91,7 @@
             margin-bottom: 15px;
         }
         .player-item {
-            padding: 5px 0;
+            padding: 6px 0;
             border-bottom: 1px solid #444;
         }
         .player-item:last-child { border-bottom: none; }
@@ -99,7 +99,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>おバカ人狼</h1>
+        <h1>Feign (おバカ村)</h1>
 
         <!-- 1. ログイン / 部屋作成・参加画面 -->
         <div id="setup-screen">
@@ -126,54 +126,80 @@
             <div class="status-badge" id="phase-display">待機中</div>
             <h2>部屋コード: <span id="room-code-display"></span></h2>
 
+            <!-- 役職表示（Feignでは見た目の役職が表示される） -->
             <div class="role-box">
-                あなたの見た目の役職:<br>
+                見えている役職:<br>
                 <span id="displayed-role" class="role-title">未定</span>
             </div>
 
             <!-- 待機フェーズ -->
             <div id="lobby-phase" class="phase-section">
-                <div id="host-controls">
-                    <button class="btn-danger" onclick="handleStartGame()">ゲームを開始する (3人以上)</button>
+                <h3>参加者一覧</h3>
+                <div class="player-list" id="lobby-players-list"></div>
+                
+                <!-- ホスト専用スタートボタン -->
+                <div id="host-controls" class="hidden">
+                    <button class="btn-danger" onclick="handleStartGame()">ゲームを開始する</button>
                 </div>
                 <p id="waiting-message" class="hidden">ホストがゲームを開始するのを待っています...</p>
             </div>
 
-            <!-- 夜フェーズ -->
+            <!-- 夜フェーズ（訪問・能力実行） -->
             <div id="night-phase" class="phase-section hidden">
-                <h3>🌙 夜の行動</h3>
-                <p>対象のプレイヤーを選択してアクションを実行してください。</p>
+                <h3>🌙 夜の行動（訪問先選択）</h3>
+                <p id="role-instruction">対象のプレイヤーの家を選択してください。</p>
                 <div class="input-group">
-                    <label for="night-target-select">対象プレイヤー</label>
+                    <label for="night-target-select">訪問する家</label>
                     <select id="night-target-select"></select>
                 </div>
-                <button class="btn-warning" id="action-btn" onclick="handleSendAction()">アクション送信</button>
+                
+                <!-- 魔術師用等の追加入力欄 -->
+                <div id="extra-action-input" class="input-group hidden">
+                    <label for="guess-role-select">予想する役職</label>
+                    <select id="guess-role-select">
+                        <option value="ドクター">ドクター</option>
+                        <option value="ポリス">ポリス</option>
+                        <option value="トラッパー">トラッパー</option>
+                        <option value="ルックアウト">ルックアウト</option>
+                        <option value="インベスティゲーター">インベスティゲーター</option>
+                        <option value="トラッカー">トラッカー</option>
+                        <option value="ブレイマー">ブレイマー</option>
+                        <option value="クリーナー">クリーナー</option>
+                        <option value="ボマー">ボマー</option>
+                        <option value="サバイバー">サバイバー</option>
+                        <option value="シーフ">シーフ</option>
+                    </select>
+                </div>
+
+                <button class="btn-warning" id="action-btn" onclick="handleSendAction()">行動を確定する</button>
                 <p id="action-status-msg" style="color: #2ecc71;"></p>
             </div>
 
-            <!-- 昼・議論フェーズ -->
+            <!-- 昼・討論フェーズ -->
             <div id="day-phase" class="phase-section hidden">
-                <h3>☀️ 昼の議論</h3>
-                <p>みんなで話し合って人狼を探しましょう！</p>
+                <h3>☀️ 昼の話し合い</h3>
+                <div id="night-results" class="role-box" style="font-size: 14px; text-align: left;">
+                    <!-- 夜の結果報告（誰が来ただの足跡だの） -->
+                </div>
                 <div class="player-list" id="living-players-list"></div>
             </div>
 
             <!-- 投票フェーズ -->
             <div id="vote-phase" class="phase-section hidden">
-                <h3>🗳️ 投票</h3>
+                <h3>🗳️ 追放投票</h3>
                 <p>追放したいプレイヤーを選択してください。</p>
                 <div class="input-group">
-                    <label for="vote-target-select">投票対象</label>
+                    <label for="vote-target-select">投票先</label>
                     <select id="vote-target-select"></select>
                 </div>
                 <button class="btn-danger" id="vote-btn" onclick="handleSendVote()">投票する</button>
                 <p id="vote-status-msg" style="color: #2ecc71;"></p>
             </div>
 
-            <!-- 結果フェーズ -->
+            <!-- 結果発表 -->
             <div id="result-phase" class="phase-section hidden">
-                <h3>🏆 ゲーム結果</h3>
-                <div id="result-content" class="role-box"></div>
+                <h3>🏆 勝敗判定・種明かし</h3>
+                <div id="result-content" class="role-box" style="text-align: left; font-size: 14px;"></div>
             </div>
         </div>
     </div>

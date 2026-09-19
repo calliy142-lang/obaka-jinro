@@ -48,25 +48,24 @@ function showGameScreen() {
     document.getElementById('room-code-display').textContent = currentRoomCode;
 }
 
-// 定期取得（ポーリング）
 function startPolling() {
     fetchGameStatus();
     if (pollInterval) clearInterval(pollInterval);
     pollInterval = setInterval(fetchGameStatus, 2000);
 }
 
-// ゲーム状態の更新とフェーズ制御
+// ステータス更新処理
 async function fetchGameStatus() {
     if (!currentRoomCode || !currentPlayerId) return;
 
     try {
         const info = await API.getPlayerInfo(currentRoomCode, currentPlayerId);
         
-        // 役職とフェーズの更新
+        // 1. 見た目の役職表示
         document.getElementById('displayed-role').textContent = info.displayed_role || "未定";
         document.getElementById('phase-display').textContent = getPhaseName(info.phase);
 
-        // ホスト判定とボタン制御
+        // 2. ホストボタンの固定制御（消えないように修正）
         const hostControls = document.getElementById('host-controls');
         const waitingMessage = document.getElementById('waiting-message');
 
@@ -78,7 +77,12 @@ async function fetchGameStatus() {
             waitingMessage.classList.remove('hidden');
         }
 
-        // フェーズが変わったら画面切り替え
+        // 3. 待機中のプレイヤー一覧
+        if (info.phase === 'lobby' && info.all_players) {
+            renderLobbyPlayers(info.all_players);
+        }
+
+        // 4. フェーズ変更検知
         if (currentPhase !== info.phase) {
             currentPhase = info.phase;
             updatePhaseUI(info);
@@ -91,33 +95,56 @@ async function fetchGameStatus() {
 
 function getPhaseName(phase) {
     const phaseNames = {
-        'lobby': '待機中',
-        'night': '夜（行動）',
-        'day': '昼（議論）',
+        'lobby': 'ロビー待機中',
+        'night': '夜（行動選択）',
+        'day': '昼（話し合い）',
         'vote': '投票中',
-        'result': '結果発表'
+        'result': '勝敗発表'
     };
     return phaseNames[phase] || phase;
 }
 
-// フェーズごとのUI表示切り替え
+// 各フェーズ画面の表示切り替え
 function updatePhaseUI(info) {
-    // 全フェーズ非表示
-    document.querySelectorAll('.phase-section').forEach(el => el.classList.add('hidden'));
-
     const phase = info.phase || 'lobby';
+
+    // 一旦すべてのフェーズ要素を隠す
+    document.querySelectorAll('.phase-section').forEach(el => el.classList.add('hidden'));
 
     if (phase === 'lobby') {
         document.getElementById('lobby-phase').classList.remove('hidden');
     } else if (phase === 'night') {
         document.getElementById('night-phase').classList.remove('hidden');
+        document.getElementById('action-btn').disabled = false;
+        document.getElementById('action-status-msg').textContent = "";
+        
         populatePlayerDropdown('night-target-select', info.other_players);
+        
+        // 魔術師などの特殊入力
+        if (info.displayed_role === '魔術師') {
+            document.getElementById('extra-action-input').classList.remove('hidden');
+        } else {
+            document.getElementById('extra-action-input').classList.add('hidden');
+        }
+
     } else if (phase === 'day') {
         document.getElementById('day-phase').classList.remove('hidden');
         renderLivingPlayers(info.other_players);
+        
+        // 夜の報告事項表示
+        const nightResults = document.getElementById('night-results');
+        if (info.night_report) {
+            nightResults.innerHTML = info.night_report;
+        } else {
+            nightResults.innerHTML = "昨夜の特別な通知はありません。";
+        }
+
     } else if (phase === 'vote') {
         document.getElementById('vote-phase').classList.remove('hidden');
+        document.getElementById('vote-btn').disabled = false;
+        document.getElementById('vote-status-msg').textContent = "";
         populatePlayerDropdown('vote-target-select', info.other_players);
+
     } else if (phase === 'result') {
         document.getElementById('result-phase').classList.remove('hidden');
         if (info.result) {
@@ -126,7 +153,7 @@ function updatePhaseUI(info) {
     }
 }
 
-// ドロップダウンリストの作成
+// ドロップダウン更新
 function populatePlayerDropdown(selectId, players) {
     const select = document.getElementById(selectId);
     select.innerHTML = '';
@@ -140,7 +167,19 @@ function populatePlayerDropdown(selectId, players) {
     });
 }
 
-// プレイヤー一覧表示
+// ロビー用プレイヤー一覧
+function renderLobbyPlayers(players) {
+    const container = document.getElementById('lobby-players-list');
+    container.innerHTML = '';
+    players.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'player-item';
+        div.textContent = p.name + (p.is_host ? " (ホスト)" : "");
+        container.appendChild(div);
+    });
+}
+
+// 生存者一覧
 function renderLivingPlayers(players) {
     const container = document.getElementById('living-players-list');
     container.innerHTML = '<strong>生存プレイヤー:</strong>';
@@ -154,7 +193,7 @@ function renderLivingPlayers(players) {
     });
 }
 
-// スタートボタン
+// ゲーム開始
 async function handleStartGame() {
     try {
         const res = await fetch(`/api/room/${currentRoomCode}/start`, {
@@ -163,7 +202,7 @@ async function handleStartGame() {
             body: JSON.stringify({ host_player_id: currentPlayerId })
         });
         const data = await res.json();
-        if (!res.ok) return alert(data.detail || "スタート失敗");
+        if (!res.ok) return alert(data.detail || "スタートできません");
         fetchGameStatus();
     } catch (err) {
         alert("通信エラー: " + err.message);
@@ -175,9 +214,11 @@ async function handleSendAction() {
     const targetId = document.getElementById('night-target-select').value;
     if (!targetId) return alert("対象を選択してください");
 
+    const guessedRole = document.getElementById('guess-role-select').value;
+
     try {
-        const res = await API.sendAction(currentRoomCode, currentPlayerId, targetId);
-        document.getElementById('action-status-msg').textContent = res.message || "アクションを送信しました";
+        const res = await API.sendAction(currentRoomCode, currentPlayerId, targetId, guessedRole);
+        document.getElementById('action-status-msg').textContent = res.message || "行動を決定しました";
         document.getElementById('action-btn').disabled = true;
     } catch (err) {
         alert("送信失敗: " + err.message);
@@ -191,7 +232,7 @@ async function handleSendVote() {
 
     try {
         const res = await API.sendVote(currentRoomCode, currentPlayerId, targetId);
-        document.getElementById('vote-status-msg').textContent = res.message || "投票を受け付けました";
+        document.getElementById('vote-status-msg').textContent = res.message || "投票完了";
         document.getElementById('vote-btn').disabled = true;
     } catch (err) {
         alert("投票失敗: " + err.message);
