@@ -39,6 +39,7 @@ class Room:
         self.day_count = 1
         self.day_timer = 60
         self.role_distribution = {role: 0 for role in ROLE_CONFIGS}
+        # デフォルトで割り当てる基本役職
         self.role_distribution["doctor"] = 1
         self.role_distribution["police"] = 1
         self.role_distribution["investigator"] = 1
@@ -111,7 +112,6 @@ def start_game(room_code: str, data: dict):
     player_ids = list(room.players.keys())
     total_players = len(player_ids)
     
-    # 1人での開始を禁止するガード
     if total_players < 2:
         raise HTTPException(status_code=400, detail="ゲームを開始するには最低2人以上のプレイヤーが必要です。")
     

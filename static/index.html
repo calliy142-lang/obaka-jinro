@@ -6,7 +6,7 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <div class="container" style="max-width: 600px; margin: 20px auto; font-family: sans-serif; padding: 20px;">
+    <div class="container" style="max-width: 650px; margin: 20px auto; font-family: sans-serif; padding: 20px;">
         <h1 style="text-align: center;">おバカ人狼</h1>
 
         <!-- ロビー画面 -->
@@ -39,8 +39,9 @@
                     <label>昼の制限時間（秒）: <input type="number" id="dayTimerInput" value="60" min="10" max="300" style="width: 80px; padding: 4px;"></label>
                 </div>
                 
-                <h4 style="margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">役職別人数配分（固定数・残りはランダム）</h4>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px;">
+                <h4 style="margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px;">役職別人数配分（すべての役職を自由に設定可能）</h4>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
+                    <!-- イノセント陣営 -->
                     <label style="font-size: 0.9em;">バカ: <input type="number" class="role-input" data-role="fool" value="0" min="0" style="width: 40px;"></label>
                     <label style="font-size: 0.9em;">ドクター: <input type="number" class="role-input" data-role="doctor" value="1" min="0" style="width: 40px;"></label>
                     <label style="font-size: 0.9em;">ねずみ: <input type="number" class="role-input" data-role="mouse" value="0" min="0" style="width: 40px;"></label>
@@ -50,15 +51,19 @@
                     <label style="font-size: 0.9em;">インベスティ: <input type="number" class="role-input" data-role="investigator" value="1" min="0" style="width: 40px;"></label>
                     <label style="font-size: 0.9em;">挑発者: <input type="number" class="role-input" data-role="provoker" value="0" min="0" style="width: 40px;"></label>
                     <label style="font-size: 0.9em;">トラッカー: <input type="number" class="role-input" data-role="tracker" value="0" min="0" style="width: 40px;"></label>
-                    <label style="font-size: 0.9em;">インポスター: <input type="number" class="role-input" data-role="imposter" value="1" min="0" style="width: 40px;"></label>
-                    <label style="font-size: 0.9em;">ブレイマー: <input type="number" class="role-input" data-role="blaimer" value="0" min="0" style="width: 40px;"></label>
-                    <label style="font-size: 0.9em;">クリーナー: <input type="number" class="role-input" data-role="cleaner" value="0" min="0" style="width: 40px;"></label>
-                    <label style="font-size: 0.9em;">シリアルK: <input type="number" class="role-input" data-role="serial_killer" value="0" min="0" style="width: 40px;"></label>
-                    <label style="font-size: 0.9em;">ボマー: <input type="number" class="role-input" data-role="bomber" value="0" min="0" style="width: 40px;"></label>
-                    <label style="font-size: 0.9em;">サバイバー: <input type="number" class="role-input" data-role="survivor" value="0" min="0" style="width: 40px;"></label>
-                    <label style="font-size: 0.9em;">シーフ: <input type="number" class="role-input" data-role="thief" value="0" min="0" style="width: 40px;"></label>
-                    <label style="font-size: 0.9em;">ゴースト: <input type="number" class="role-input" data-role="ghost" value="0" min="0" style="width: 40px;"></label>
-                    <label style="font-size: 0.9em;">魔術師: <input type="number" class="role-input" data-role="magician" value="0" min="0" style="width: 40px;"></label>
+                    
+                    <!-- インポスター陣営 -->
+                    <label style="font-size: 0.9em; color: #d9534f; font-weight: bold;">インポスター: <input type="number" class="role-input" data-role="imposter" value="1" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em; color: #d9534f;">ブレイマー: <input type="number" class="role-input" data-role="blaimer" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em; color: #d9534f;">クリーナー: <input type="number" class="role-input" data-role="cleaner" value="0" min="0" style="width: 40px;"></label>
+                    
+                    <!-- 第三陣営 -->
+                    <label style="font-size: 0.9em; color: #6c757d;">シリアルK: <input type="number" class="role-input" data-role="serial_killer" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em; color: #6c757d;">ボマー: <input type="number" class="role-input" data-role="bomber" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em; color: #6c757d;">サバイバー: <input type="number" class="role-input" data-role="survivor" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em; color: #6c757d;">シーフ: <input type="number" class="role-input" data-role="thief" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em; color: #6c757d;">ゴースト: <input type="number" class="role-input" data-role="ghost" value="0" min="0" style="width: 40px;"></label>
+                    <label style="font-size: 0.9em; color: #6c757d;">魔術師: <input type="number" class="role-input" data-role="magician" value="0" min="0" style="width: 40px;"></label>
                 </div>
                 
                 <button onclick="handleStartGame()" style="background: #28a745; color: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 4px; cursor: pointer; width: 100%;">ゲームスタート</button>

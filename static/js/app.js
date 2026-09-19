@@ -67,13 +67,11 @@ async function handleStartGame() {
     const dayTimer = document.getElementById("dayTimerInput").value;
     const roleInputs = document.querySelectorAll(".role-input");
     let roleDistribution = {};
-    let totalAssigned = 0;
     
     roleInputs.forEach(input => {
         const role = input.dataset.role;
         const count = parseInt(input.value) || 0;
         roleDistribution[role] = count;
-        totalAssigned += count;
     });
 
     try {
