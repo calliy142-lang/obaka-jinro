@@ -50,6 +50,13 @@
             cursor: pointer;
         }
     </style>
+<style>
+.role-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+.role-grid label{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border:1px solid #ddd;border-radius:7px;background:#fafafa;}
+.role-grid input,.faction-input{width:70px;box-sizing:border-box;padding:7px;border:1px solid #bbb;border-radius:5px;}
+@media(max-width:700px){.role-grid{grid-template-columns:1fr 1fr;} }
+@media(max-width:480px){.role-grid{grid-template-columns:1fr;} }
+</style>
 </head>
 <body>
 <div class="container">
@@ -155,37 +162,58 @@
                 </label>
             </div>
 
-            <div style="background:#f8f9fa;border:1px solid #ddd;border-radius:6px;padding:12px;margin-bottom:15px;">
-                <h4 style="margin:0 0 8px 0;">役職振り分け設定</h4>
-                <p style="margin:0 0 12px 0;font-size:0.9em;color:#555;line-height:1.5;">
-                    優先順位は <b>①陣営人数 → ②バカ人数 → ③残りを0人指定の役職からランダム</b> です。<br>
-                    インポスターは独立した役職ではなく陣営です。インポスター陣営には、ドクター・バカ以外のイノセント系役職がランダムで割り当てられます。
-                </p>
+            <div style="margin-top:10px;display:grid;gap:16px;">
+                <section style="border:2px solid #007bff;border-radius:10px;padding:16px;background:#f7fbff;">
+                    <h3 style="margin:0 0 6px;color:#0056b3;">① 陣営人数（最優先）</h3>
+                    <p style="margin:0 0 12px;color:#555;font-size:0.9em;">合計を参加人数に合わせてください。まずこの人数枠を確定し、その中に個別役職を割り当てます。</p>
+                    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
+                        <label style="background:white;border:1px solid #cfe2ff;border-radius:8px;padding:12px;font-weight:bold;">イノセント<br>
+                            <input type="number" id="factionInnocent" value="2" min="0" class="faction-input">
+                        </label>
+                        <label style="background:white;border:1px solid #f5c2c7;border-radius:8px;padding:12px;font-weight:bold;color:#b02a37;">インポスター<br>
+                            <input type="number" id="factionImposter" value="1" min="0" class="faction-input">
+                        </label>
+                        <label style="background:white;border:1px solid #ced4da;border-radius:8px;padding:12px;font-weight:bold;color:#495057;">ニュートラル<br>
+                            <input type="number" id="factionNeutral" value="0" min="0" class="faction-input">
+                        </label>
+                    </div>
+                    <div id="factionTotalText" style="margin-top:10px;font-weight:bold;"></div>
+                </section>
 
-                <div style="margin-bottom:12px;font-weight:bold;">
-                    参加人数: <span id="hostPlayerCount">-</span>人
-                </div>
+                <section style="border:2px solid #6c757d;border-radius:10px;padding:16px;background:#fff;">
+                    <h3 style="margin:0 0 6px;">② 個別役職人数</h3>
+                    <p style="margin:0 0 14px;color:#555;font-size:0.9em;">0人の役職は、陣営の余った枠を埋める際にランダム候補になります。1人以上を指定した役職は、その人数を優先して配置します。</p>
 
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:15px;">
-                    <label>イノセント
-                        <input type="number" id="factionInnocent" value="2" min="0" style="width:60px;">人
-                    </label>
-                    <label style="color:#d9534f;font-weight:bold;">インポスター
-                        <input type="number" id="factionImposter" value="1" min="0" style="width:60px;">人
-                    </label>
-                    <label style="color:#6c757d;font-weight:bold;">第三陣営
-                        <input type="number" id="factionNeutral" value="0" min="0" style="width:60px;">人
-                    </label>
-                </div>
+                    <h4 style="margin:12px 0 8px;color:#0056b3;">イノセント系</h4>
+                    <div class="role-grid">
+                        <label>バカ <input type="number" class="role-input" data-role="fool" value="0" min="0"></label>
+                        <label>ドクター <input type="number" class="role-input" data-role="doctor" value="0" min="0"></label>
+                        <label>ねずみ <input type="number" class="role-input" data-role="mouse" value="0" min="0"></label>
+                        <label>ポリス <input type="number" class="role-input" data-role="police" value="0" min="0"></label>
+                        <label>トラッパー <input type="number" class="role-input" data-role="trapper" value="0" min="0"></label>
+                        <label>ルックアウト <input type="number" class="role-input" data-role="lookout" value="0" min="0"></label>
+                        <label>インベスティゲーター <input type="number" class="role-input" data-role="investigator" value="0" min="0"></label>
+                        <label>挑発者 <input type="number" class="role-input" data-role="provoker" value="0" min="0"></label>
+                        <label>トラッカー <input type="number" class="role-input" data-role="tracker" value="0" min="0"></label>
+                    </div>
 
-                <div style="border-top:1px solid #ddd;padding-top:12px;">
-                    <label style="font-weight:bold;">バカ（個別指定）
-                        <input type="number" class="role-input" data-role="fool" value="0" min="0" style="width:60px;">人
-                    </label>
-                    <p style="margin:6px 0 0 0;font-size:0.85em;color:#666;">
-                        指定した人数のバカを、イノセント陣営の枠へ最優先で配置します。残りは0人指定の役職からランダムです。
-                    </p>
-                </div>
+                    <h4 style="margin:18px 0 8px;color:#b02a37;">インポスター陣営の専用役職</h4>
+                    <div class="role-grid">
+                        <label>ブレイマー <input type="number" class="role-input" data-role="blaimer" value="0" min="0"></label>
+                        <label>クリーナー <input type="number" class="role-input" data-role="cleaner" value="0" min="0"></label>
+                    </div>
+                    <p style="margin:8px 0 0;color:#777;font-size:0.85em;">※インポスターは独立した役職ではありません。ねずみ／ポリス／トラッパー／ルックアウト／インベスティゲーター／挑発者／トラッカーがインポスター陣営になることがあります。ドクターとバカはインポスター対象外です。</p>
+
+                    <h4 style="margin:18px 0 8px;color:#495057;">ニュートラル</h4>
+                    <div class="role-grid">
+                        <label>シリアルキラー <input type="number" class="role-input" data-role="serial_killer" value="0" min="0"></label>
+                        <label>ボマー <input type="number" class="role-input" data-role="bomber" value="0" min="0"></label>
+                        <label>サバイバー <input type="number" class="role-input" data-role="survivor" value="0" min="0"></label>
+                        <label>シーフ <input type="number" class="role-input" data-role="thief" value="0" min="0"></label>
+                        <label>ゴースト <input type="number" class="role-input" data-role="ghost" value="0" min="0"></label>
+                        <label>魔術師 <input type="number" class="role-input" data-role="magician" value="0" min="0"></label>
+                    </div>
+                </section>
             </div>
 
             <button onclick="handleStartGame()"
@@ -243,7 +271,7 @@
          style="display:none;margin-top:20px;background:#fff;border:2px solid #6c757d;border-radius:8px;padding:15px;">
 
         <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #ddd;padding-bottom:8px;">
-            <h3 style="margin:0;">📖 全18役職 ルール説明＆勝利条件</h3>
+            <h3 style="margin:0;">📖 役職ルール説明＆勝利条件</h3>
 
             <button onclick="toggleRoleGuide()"
                     style="background:#dc3545;color:white;border:none;padding:4px 8px;border-radius:4px;">

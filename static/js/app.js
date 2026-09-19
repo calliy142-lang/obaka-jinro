@@ -1,6 +1,24 @@
 let currentRoomCode = null;
 let currentPlayerId = null;
 let pollInterval = null;
+let currentDistMode = "individual";
+
+function switchMode(mode) {
+    // 旧UIとの互換用。現在は陣営＋個別役職を同時に設定します。
+    currentDistMode = "combined";
+    updateFactionTotal();
+}
+
+function updateFactionTotal() {
+    const ids = ["factionInnocent", "factionImposter", "factionNeutral"];
+    const total = ids.reduce((sum, id) => sum + (parseInt(document.getElementById(id)?.value) || 0), 0);
+    const playerCount = window.currentPlayerCount || null;
+    const box = document.getElementById("factionTotalText");
+    if (!box) return;
+    box.innerText = playerCount === null ? `設定合計: ${total}人` : `設定合計: ${total}人 / 参加人数: ${playerCount}人`;
+    box.style.color = playerCount !== null && total !== playerCount ? "#dc3545" : "#198754";
+}
+
 function toggleRoleGuide() {
     const panel = document.getElementById("roleGuidePanel");
     if (!panel) return;
@@ -55,45 +73,29 @@ function leaveRoom() {
 }
 
 async function handleStartGame() {
-    const factionInnocent = parseInt(document.getElementById("factionInnocent").value) || 0;
-    const factionImposter = parseInt(document.getElementById("factionImposter").value) || 0;
-    const factionNeutral = parseInt(document.getElementById("factionNeutral").value) || 0;
-    const foolCount = parseInt(document.querySelector('.role-input[data-role="fool"]').value) || 0;
-    const playerCountText = document.getElementById("hostPlayerCount")?.innerText || "0";
-    const playerCount = parseInt(playerCountText) || 0;
-    const factionTotal = factionInnocent + factionImposter + factionNeutral;
-
-    if (playerCount > 0 && factionTotal !== playerCount) {
-        alert(`陣営人数の合計を参加人数(${playerCount}人)に合わせてください。現在は${factionTotal}人です。`);
-        return;
-    }
-
-    if (foolCount > factionInnocent) {
-        alert("バカの人数はイノセント陣営の人数を超えられません。");
-        return;
-    }
+    const roleDistribution = {};
+    document.querySelectorAll(".role-input").forEach(input => {
+        roleDistribution[input.dataset.role] = parseInt(input.value) || 0;
+    });
 
     const settingsPayload = {
         host_player_id: currentPlayerId,
         day_timer: document.getElementById("dayTimerInput").value,
-        distribution_mode: "unified",
+        distribution_mode: "combined",
+        role_distribution: roleDistribution,
         faction_distribution: {
-            innocent: factionInnocent,
-            imposter: factionImposter,
-            neutral: factionNeutral
-        },
-        role_distribution: {
-            fool: foolCount
+            innocent: parseInt(document.getElementById("factionInnocent").value) || 0,
+            imposter: parseInt(document.getElementById("factionImposter").value) || 0,
+            neutral: parseInt(document.getElementById("factionNeutral").value) || 0
         }
     };
 
     try {
         await API.updateSettings(currentRoomCode, settingsPayload);
         await API.startGame(currentRoomCode, currentPlayerId);
-    } catch (err) {
-        alert(err.message);
-    }
+    } catch (err) { alert(err.message); }
 }
+
 
 const MAGICIAN_GUESS_ROLES = [
     ["fool", "バカ"], ["doctor", "ドクター"], ["mouse", "ねずみ"],
@@ -237,10 +239,6 @@ async function updateGameState() {
     if (!currentRoomCode || !currentPlayerId) return;
     try {
         const info = await API.getPlayerInfo(currentRoomCode, currentPlayerId);
-        const hostPlayerCount = document.getElementById("hostPlayerCount");
-        if (hostPlayerCount && info.player_count !== undefined) {
-            hostPlayerCount.innerText = info.player_count;
-        }
         document.getElementById("phaseText").innerText = `現在のフェーズ: ${info.phase} / ${info.day_count}日目`;
         const roleName = document.getElementById("roleName"); roleName.innerText = `あなたの役職: ${info.displayed_role}`; roleName.dataset.role = info.displayed_role;
         document.getElementById("statusText").innerText = info.alive ? "状態: 生存" : "状態: 死亡";
@@ -262,3 +260,12 @@ window.onload = function() {
     const savedCode = localStorage.getItem("roomCode"); const savedPlayer = localStorage.getItem("playerId");
     if (savedCode && savedPlayer) { currentRoomCode = savedCode; currentPlayerId = savedPlayer; showGameScreen(); startPolling(); }
 };
+
+
+window.addEventListener("DOMContentLoaded", () => {
+    ["factionInnocent", "factionImposter", "factionNeutral"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("input", updateFactionTotal);
+    });
+    updateFactionTotal();
+});

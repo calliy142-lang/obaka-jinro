@@ -71,9 +71,11 @@ class Room:
         self.phase = "SETUP"
         self.day_count = 1
         self.day_timer = 60
-        self.distribution_mode = "unified"
-        # 統合配分では個別指定はバカのみ。
-        self.role_distribution = {"fool": 0}
+        self.distribution_mode = "individual"
+        self.role_distribution = {role: 0 for role in ROLE_CONFIGS}
+        self.role_distribution["doctor"] = 1
+        self.role_distribution["police"] = 1
+        self.role_distribution["investigator"] = 1
         self.faction_distribution = {"innocent": 2, "imposter": 1, "neutral": 0}
 
         self.actions = {}
@@ -239,92 +241,142 @@ def assign_role(player, role):
             player["ability_uses_remaining"][ability] = uses
 
 
-def choose_roles_unified(room):
-    """
-    統合版の役職配分。優先順位は以下。
-    1. 陣営人数を最優先で確定
-    2. バカの指定人数をイノセント枠へ優先配置
-    3. 残った枠は「0人指定」の役職から、その陣営の候補をランダム配置
+def _role_is_impostor_eligible(role):
+    return role in IMPOSTER_ELIGIBLE_INNOCENT_ROLES
 
-    インポスターは独立役職ではなく陣営なので、
-    インポスター枠には IMPOSTER_ELIGIBLE_INNOCENT_ROLES の役職を割り当てる。
-    ドクターとバカはインポスター枠には入らない。
-    """
+
+def _role_allowed_in_camp(role, camp):
+    if role not in ROLE_CONFIGS:
+        return False
+    base_camp = ROLE_CONFIGS[role]["camp"]
+    if camp == "neutral":
+        return base_camp == "neutral"
+    if camp == "imposter":
+        # インポスターは独立役職ではない。対象イノセント系役職だけを持つ。
+        return _role_is_impostor_eligible(role) or base_camp == "imposter"
+    # innocent
+    return base_camp == "innocent"
+
+
+def _validate_distribution(room):
+    player_count = len(room.players)
+    faction = {c: max(0, int(room.faction_distribution.get(c, 0)))
+               for c in ["innocent", "imposter", "neutral"]}
+
+    if sum(faction.values()) != player_count:
+        raise HTTPException(
+            status_code=400,
+            detail=f"陣営人数の合計を参加人数({player_count}人)に合わせてください。現在は{sum(faction.values())}人です。"
+        )
+
+    role_counts = {role: max(0, int(room.role_distribution.get(role, 0)))
+                   for role in ROLE_CONFIGS}
+
+    # 個別指定は「第2優先」。指定役職が陣営枠を超える場合は開始不可。
+    fixed_by_camp = {"innocent": 0, "imposter": 0, "neutral": 0}
+    flexible_counts = []
+    for role, count in role_counts.items():
+        if count <= 0:
+            continue
+        base = ROLE_CONFIGS[role]["camp"]
+        if base == "neutral":
+            fixed_by_camp["neutral"] += count
+        elif base == "imposter":
+            fixed_by_camp["imposter"] += count
+        elif role in IMPOSTER_ELIGIBLE_INNOCENT_ROLES:
+            flexible_counts.append((role, count))
+        else:
+            fixed_by_camp["innocent"] += count
+
+    for camp in fixed_by_camp:
+        if fixed_by_camp[camp] > faction[camp]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{camp}陣営の個別役職指定が陣営人数を超えています。"
+            )
+
+    # 柔軟役職（ねずみ等）は、まずイノセント枠、足りなければインポスター枠へ。
+    remaining = {c: faction[c] - fixed_by_camp[c] for c in faction}
+    for role, count in flexible_counts:
+        if count > remaining["innocent"] + remaining["imposter"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"役職「{role_name(role)}」の個別指定数が残りの陣営枠を超えています。"
+            )
+        use_innocent = min(count, remaining["innocent"])
+        remaining["innocent"] -= use_innocent
+        remaining["imposter"] -= count - use_innocent
+
+
+def choose_roles_combined(room):
+    """陣営人数を最優先し、個別役職指定を次に反映、残りを0指定役職からランダム補充する。"""
+    _validate_distribution(room)
+
     players = list(room.players.values())
     random.shuffle(players)
-    total = len(players)
 
-    factions = {
-        "innocent": max(0, int(room.faction_distribution.get("innocent", 0))),
-        "imposter": max(0, int(room.faction_distribution.get("imposter", 0))),
-        "neutral": max(0, int(room.faction_distribution.get("neutral", 0))),
+    faction_counts = {c: int(room.faction_distribution.get(c, 0))
+                      for c in ["innocent", "imposter", "neutral"]}
+    faction_players = {}
+    cursor = 0
+    for camp in ["innocent", "imposter", "neutral"]:
+        faction_players[camp] = players[cursor:cursor + faction_counts[camp]]
+        cursor += faction_counts[camp]
+
+    role_counts = {role: max(0, int(room.role_distribution.get(role, 0)))
+                   for role in ROLE_CONFIGS}
+    assigned = {camp: [] for camp in faction_players}
+
+    # 1) 固定陣営の個別指定。
+    for role, count in role_counts.items():
+        if count <= 0:
+            continue
+        base = ROLE_CONFIGS[role]["camp"]
+        if base == "neutral":
+            target_camp = "neutral"
+        elif base == "imposter":
+            target_camp = "imposter"
+        elif role in IMPOSTER_ELIGIBLE_INNOCENT_ROLES:
+            continue
+        else:
+            target_camp = "innocent"
+        assigned[target_camp].extend([role] * count)
+
+    # 2) 柔軟なイノセント系役職は、空いているイノセント枠を優先。
+    for role, count in role_counts.items():
+        if count <= 0 or role not in IMPOSTER_ELIGIBLE_INNOCENT_ROLES:
+            continue
+        available_i = faction_counts["innocent"] - len(assigned["innocent"])
+        take_i = min(count, max(0, available_i))
+        assigned["innocent"].extend([role] * take_i)
+        assigned["imposter"].extend([role] * (count - take_i))
+
+    # 3) 残り枠は「個別指定0」の役職からランダム。
+    zero_roles = [r for r, n in role_counts.items() if n == 0]
+    pools = {
+        "innocent": [r for r in zero_roles if _role_allowed_in_camp(r, "innocent")],
+        "imposter": [r for r in zero_roles if _role_allowed_in_camp(r, "imposter")],
+        "neutral": [r for r in zero_roles if _role_allowed_in_camp(r, "neutral")],
     }
 
-    faction_total = sum(factions.values())
-    if faction_total != total:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"陣営人数の合計({faction_total}人)と参加人数({total}人)を一致させてください。"
-            ),
-        )
-
-    fool_count = max(0, int(room.role_distribution.get("fool", 0)))
-    if fool_count > factions["innocent"]:
-        raise HTTPException(
-            status_code=400,
-            detail="バカの人数はイノセント陣営の人数を超えられません。",
-        )
-
-    role_pools = {
-        "innocent": [
-            "fool", "doctor", "mouse", "police", "trapper",
-            "lookout", "investigator", "provoker", "tracker"
-        ],
-        "imposter": list(IMPOSTER_ELIGIBLE_INNOCENT_ROLES),
-        "neutral": [
-            "serial_killer", "bomber", "survivor", "thief",
-            "ghost", "magician"
-        ],
-    }
-
-    # まず陣営を確定する。
-    faction_list = []
     for camp in ["innocent", "imposter", "neutral"]:
-        faction_list.extend([camp] * factions[camp])
-    random.shuffle(faction_list)
+        need = faction_counts[camp] - len(assigned[camp])
+        if need < 0:
+            raise HTTPException(status_code=400, detail=f"{camp}陣営の役職指定が人数を超えています。")
+        if need and not pools[camp]:
+            raise HTTPException(status_code=400, detail=f"{camp}陣営の残り枠に割り当て可能な役職がありません。")
+        assigned[camp].extend(random.choices(pools[camp], k=need))
 
-    # 陣営ごとに役職を作る。
-    assigned_by_camp = {"innocent": [], "imposter": [], "neutral": []}
-
-    # 1) バカを最優先で固定。
-    assigned_by_camp["innocent"].extend(["fool"] * fool_count)
-
-    # 2) 残りは「0人指定」の役職からランダム。
-    # 現在、個別指定として意味を持つのはバカだけなので、
-    # バカを指定した場合は追加のバカをランダムで引かない。
+    # 4) 実プレイヤーへ割り当て。
     for camp in ["innocent", "imposter", "neutral"]:
-        slots = factions[camp] - len(assigned_by_camp[camp])
-        pool = list(role_pools[camp])
-
-        if camp == "innocent" and fool_count > 0:
-            pool = [role for role in pool if role != "fool"]
-
-        if not pool and slots > 0:
-            raise HTTPException(status_code=400, detail=f"{camp}陣営に割り当て可能な役職がありません。")
-
-        assigned_by_camp[camp].extend(random.choices(pool, k=slots))
-        random.shuffle(assigned_by_camp[camp])
-
-    # シャッフル済みの陣営スロットへ、同じ陣営の役職を対応させる。
-    camp_positions = {"innocent": 0, "imposter": 0, "neutral": 0}
-    for player, camp in zip(players, faction_list):
-        idx = camp_positions[camp]
-        role = assigned_by_camp[camp][idx]
-        camp_positions[camp] += 1
-        assign_role(player, role)
-        # ねずみは陣営によって所属陣営が変わる柔軟役職。
-        player["camp"] = camp
+        random.shuffle(assigned[camp])
+        if len(assigned[camp]) != faction_counts[camp]:
+            raise HTTPException(status_code=500, detail="役職配分の内部計算に失敗しました。")
+        for player, role in zip(faction_players[camp], assigned[camp]):
+            assign_role(player, role)
+            if camp == "imposter" and role not in IMPOSTER_ELIGIBLE_INNOCENT_ROLES and role not in {"blaimer", "cleaner"}:
+                raise HTTPException(status_code=500, detail="不正なインポスター役職が割り当てられました。")
+            player["camp"] = camp
 
 
 def validate_target(room, player_id, target_id, allow_self=False):
@@ -1150,12 +1202,14 @@ async def update_settings(room_code: str, req: SettingsRequest):
         raise HTTPException(status_code=400, detail="ゲーム開始後は設定できません")
 
     room.day_timer = max(10, int(req.day_timer or 60))
-    room.distribution_mode = "unified"
+    room.distribution_mode = req.distribution_mode or "individual"
 
     if req.role_distribution is not None:
-        room.role_distribution["fool"] = max(
-            0, int(req.role_distribution.get("fool", 0))
-        )
+        for role in ROLE_CONFIGS:
+            room.role_distribution[role] = max(
+                0,
+                int(req.role_distribution.get(role, 0))
+            )
 
     if req.faction_distribution is not None:
         for camp in ["innocent", "imposter", "neutral"]:
@@ -1185,7 +1239,8 @@ async def start_game(room_code: str, req: StartRequest):
     if len(room.players) < 2:
         raise HTTPException(status_code=400, detail="2人以上必要です")
 
-    choose_roles_unified(room)
+    # 陣営人数を最優先し、個別役職指定を次に反映する統合方式。
+    choose_roles_combined(room)
 
     room.phase = "NIGHT"
     room.day_count = 1
@@ -1275,7 +1330,6 @@ async def get_player_info(room_code: str, player_id: str):
         "phase": room.phase,
         "day_count": room.day_count,
         "day_timer": room.day_timer,
-        "player_count": len(room.players),
 
         "alive": player["alive"],
 
