@@ -89,7 +89,10 @@ def join_room(room_code: str, data: dict):
         "name": name,
         "role": None,
         "alive": True,
-        "is_host": is_host
+        "is_host": is_host,
+        "survivor_revives": 3,
+        "candle_target": None,
+        "last_visited": None
     }
     return {"room_code": room_code, "player_id": player_id}
 
@@ -142,7 +145,6 @@ def start_game(room_code: str, data: dict):
         assigned_roles = assigned_roles[:total_players]
     
     else:
-        # 陣営比率モードの場合の割り振り
         fac_in = room.faction_distribution.get("innocent", 0)
         fac_imp = room.faction_distribution.get("imposter", 0)
         fac_neu = room.faction_distribution.get("neutral", 0)
@@ -164,8 +166,12 @@ def start_game(room_code: str, data: dict):
 
     random.shuffle(assigned_roles)
     for idx, pid in enumerate(player_ids):
-        room.players[pid]["role"] = assigned_roles[idx]
-        room.players[pid]["alive"] = True
+        p = room.players[pid]
+        p["role"] = assigned_roles[idx]
+        p["alive"] = True
+        p["survivor_revives"] = 3
+        p["candle_target"] = None
+        p["last_visited"] = None
 
     room.phase = "NIGHT"
     room.day_count = 1
@@ -221,10 +227,132 @@ def send_action(room_code: str, data: dict):
     return {"status": "success"}
 
 def resolve_night(room):
-    passed_count = sum(1 for target in room.actions.values() if target == "pass")
-    room.message = f"夜が明けました。（昨晩パスしたプレイヤー数: {passed_count}人）"
-    room.phase = "DAY"
+    reports = []
+    attacked_players = set()
+    protected_players = set()
+    blocked_players = set()
+    killed_by_sk = set()
+    killed_by_magician = set()
+
+    # 1. ポリス・トラッパーによる行動阻害
+    for pid, target_id in room.actions.items():
+        if target_id == "pass":
+            continue
+        p = room.players.get(pid)
+        if not p or not p["alive"]:
+            continue
+        role = p["role"]
+        if role in ["police", "trapper"]:
+            blocked_players.add(target_id)
+
+    # 2. 各役職の夜アクション実行判定
+    for pid, target_id in room.actions.items():
+        if target_id == "pass":
+            continue
+        p = room.players.get(pid)
+        if not p or not p["alive"]:
+            continue
+        
+        # 阻害チェック（シリアルキラーと魔術師は阻害を受けない）
+        role = p["role"]
+        if pid in blocked_players and role not in ["serial_killer", "magician"]:
+            continue
+
+        p["last_visited"] = target_id
+
+        if role == "imposter":
+            attacked_players.add(target_id)
+        elif role == "serial_killer":
+            killed_by_sk.add(target_id)
+        elif role == "magician":
+            # 魔術師の予測キル（ターゲットが誰であれ正しければキル）
+            killed_by_magician.add(target_id)
+        elif role == "doctor":
+            protected_players.add(target_id)
+        elif role == "mouse":
+            target_p = room.players.get(target_id)
+            if target_p:
+                if p["role"] == "fool":
+                    # バカのネズミはデタラメな役職結果を返す
+                    fake_role_name = random.choice(list(ROLE_CONFIGS.values()))["name"]
+                    reports.append(f"【ねずみ調査】{target_p['name']} の役職は {fake_role_name} です。")
+                else:
+                    target_role_name = ROLE_CONFIGS.get(target_p["role"], {}).get("name", "不明")
+                    reports.append(f"【ねずみ調査】{target_p['name']} の役職は {target_role_name} です。")
+        elif role == "investigator":
+            target_p = room.players.get(target_id)
+            if target_p:
+                if p["role"] == "fool":
+                    reports.append(f"【インベスティゲーター調査】{target_p['name']} の結果: デタラメな情報です。")
+                else:
+                    camp_str = "イノセント陣営" if ROLE_CONFIGS.get(target_p["role"], {}).get("camp") == "innocent" else "インポスター/ニュートラル陣営"
+                    reports.append(f"【インベスティゲーター調査】{target_p['name']} は [イノセント陣営] または [{camp_str}] のいずれかです。")
+        elif role == "ghost":
+            target_p = room.players.get(target_id)
+            if target_p:
+                target_p["candle_target"] = True
+
+    # 3. 襲撃・キルによる死亡確定処理
+    dead_names = []
+    
+    # インポスター襲撃
+    for target_id in attacked_players:
+        if target_id in protected_players:
+            continue
+        target_p = room.players.get(target_id)
+        if target_p and target_p["alive"]:
+            if target_p["role"] == "survivor" and target_p["survivor_revives"] > 0:
+                target_p["survivor_revives"] -= 1
+                reports.append(f"【サバイバー】{target_p['name']} は襲撃されましたが復活しました（残り: {target_p['survivor_revives']}回）")
+            else:
+                target_p["alive"] = False
+                dead_names.append(target_p["name"])
+
+    # シリアルキラーキル
+    for target_id in killed_by_sk:
+        target_p = room.players.get(target_id)
+        if target_p and target_p["alive"]:
+            if target_p["role"] == "survivor" and target_p["survivor_revives"] > 0:
+                target_p["survivor_revives"] -= 1
+            else:
+                target_p["alive"] = False
+                dead_names.append(target_p["name"])
+
+    # 魔術師キル（ドクター救済不可）
+    for target_id in killed_by_magician:
+        target_p = room.players.get(target_id)
+        if target_p and target_p["alive"]:
+            target_p["alive"] = False
+            dead_names.append(target_p["name"])
+
+    # 勝敗判定
+    winner = check_win_condition(room)
+    if winner:
+        room.winner_faction = winner
+        room.phase = "RESULT"
+        room.message = f"ゲーム終了！勝者陣営: {winner}"
+    else:
+        msg = "夜が明けました。"
+        if dead_names:
+            msg += f" 昨晩の犠牲者: {', '.join(dead_names)}"
+        if reports:
+            msg += " " + " / ".join(reports)
+        room.message = msg
+        room.phase = "DAY"
+
     room.actions = {}
+
+def check_win_condition(room):
+    alive_players = [p for p in room.players.values() if p["alive"]]
+    innocents = [p for p in alive_players if ROLE_CONFIGS.get(p["role"], {}).get("camp") == "innocent"]
+    imposters = [p for p in alive_players if ROLE_CONFIGS.get(p["role"], {}).get("camp") == "imposter"]
+    neutrals = [p for p in alive_players if ROLE_CONFIGS.get(p["role"], {}).get("camp") == "neutral"]
+
+    if len(imposters) == 0 and len(neutrals) == 0:
+        return "イノセント陣営"
+    if len(imposters) >= len(innocents) + len(neutrals):
+        return "インポスター陣営"
+    return None
 
 @app.post("/api/room/{room_code}/vote")
 def send_vote(room_code: str, data: dict):
@@ -256,13 +384,27 @@ def resolve_voting(room):
         top_target, max_votes = max(vote_counts.items(), key=lambda x: x[1])
         if max_votes > majority_threshold:
             exiled = top_target
-            room.players[exiled]["alive"] = False
-            room.message = f"投票の結果、{room.players[exiled]['name']} が過半数の票（{max_votes}票）により追放されました。"
+            exiled_p = room.players[exiled]
+            exiled_p["alive"] = False
+            room.message = f"投票の結果、{exiled_p['name']} が過半数の票（{max_votes}票）により追放されました。"
+            
+            # ゴーストの道連れ処理
+            if exiled_p["role"] == "ghost" and exiled_p["candle_target"]:
+                for pid, p in room.players.items():
+                    if p.get("candle_target") and p["alive"]:
+                        p["alive"] = False
+                        room.message += f" また、ゴーストの復讐により {p['name']} が道連れにされました！"
         else:
-            room.message = f"最多得票者はいましたが、生存者の過半数（{majority_threshold}票超）に達しなかったため、誰も追放されませんでした。"
+            room.message = f"最多得票者はいましたが、生存者の過半数に達しなかったため、誰も追放されませんでした。"
     else:
         room.message = "有効な投票がなかったため、誰も追放されませんでした。"
             
-    room.votes = {}
-    room.phase = "NIGHT"
-    room.day_count += 1
+    winner = check_win_condition(room)
+    if winner:
+        room.winner_faction = winner
+        room.phase = "RESULT"
+        room.message += f" ゲーム終了！勝者陣営: {winner}"
+    else:
+        room.votes = {}
+        room.phase = "NIGHT"
+        room.day_count += 1
