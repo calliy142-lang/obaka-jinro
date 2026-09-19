@@ -4,201 +4,64 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Feign (おバカ村)</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #1a1a1a;
-            color: #ffffff;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .container {
-            background-color: #2a2a2a;
-            padding: 30px;
-            border-radius: 10px;
-            width: 100%;
-            max-width: 480px;
-            text-align: center;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-        }
-        h1, h2, h3 { margin-bottom: 15px; }
-        .input-group { margin-bottom: 15px; text-align: left; }
-        label { display: block; margin-bottom: 5px; font-size: 14px; }
-        input[type="text"], select {
-            width: 100%;
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid #444;
-            background-color: #333;
-            color: #fff;
-            box-sizing: border-box;
-            font-size: 16px;
-        }
-        button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 10px;
-            font-weight: bold;
-        }
-        .btn-primary { background-color: #27ae60; color: white; }
-        .btn-secondary { background-color: #2980b9; color: white; }
-        .btn-danger { background-color: #e74c3c; color: white; }
-        .btn-warning { background-color: #f39c12; color: white; }
-        .hidden { display: none !important; }
-        .divider {
-            margin: 20px 0;
-            border-top: 1px solid #444;
-            position: relative;
-        }
-        .divider-text {
-            position: absolute;
-            top: -10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #2a2a2a;
-            padding: 0 10px;
-            color: #888;
-            font-size: 12px;
-        }
-        .role-box {
-            background-color: #333;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 15px 0;
-            font-size: 18px;
-        }
-        .role-title { font-size: 24px; color: #f1c40f; font-weight: bold; }
-        .status-badge {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 15px;
-            background-color: #e67e22;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-        .player-list {
-            text-align: left;
-            background-color: #333;
-            padding: 10px 15px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-            min-height: 50px;
-        }
-        .player-item {
-            padding: 6px 0;
-            border-bottom: 1px solid #444;
-        }
-        .player-item:last-child { border-bottom: none; }
-    </style>
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="container">
-        <h1>Feign (おバカ村)</h1>
-
-        <!-- 1. 部屋作成・参加画面 -->
-        <div id="setup-screen">
-            <div class="input-group">
-                <label for="player-name">プレイヤー名</label>
-                <input type="text" id="player-name" placeholder="名前を入力">
+        <!-- セットアップ画面 -->
+        <div id="setup-screen" class="card">
+            <h1>Feign (おバカ村)</h1>
+            <div class="form-group">
+                <label>プレイヤー名</label>
+                <input type="text" id="player-name-input" placeholder="名前を入力">
             </div>
-
-            <button class="btn-primary" onclick="handleCreateRoom()">部屋を新しく作成</button>
-
-            <div class="divider">
-                <span class="divider-text">または</span>
-            </div>
-
-            <div class="input-group">
-                <label for="room-code-input">部屋コード</label>
+            <button id="create-room-btn" class="btn btn-primary">部屋を新しく作成</button>
+            <hr>
+            <div class="form-group">
+                <label>部屋コード</label>
                 <input type="text" id="room-code-input" placeholder="部屋コードを入力">
             </div>
-            <button class="btn-secondary" onclick="handleJoinRoom()">既存の部屋に参加</button>
+            <button id="join-room-btn" class="btn btn-secondary">既存の部屋に参加</button>
         </div>
 
-        <!-- 2. ゲーム画面 -->
-        <div id="game-screen" class="hidden">
-            <div class="status-badge" id="phase-display">ロビー待機中</div>
-            <h2>部屋コード: <span id="room-code-display"></span></h2>
+        <!-- ロビー画面 -->
+        <div id="lobby-screen" class="card" style="display:none;">
+            <h2>ロビー (部屋コード: <span id="display-room-code"></span>)</h2>
+            <p>参加メンバー:</p>
+            <ul id="player-list"></ul>
+            <button id="start-game-btn" class="btn btn-success" style="display:none;">ゲームを開始する</button>
+        </div>
 
-            <div class="role-box">
-                見えている役職:<br>
-                <span id="displayed-role" class="role-title">未定</span>
+        <!-- 夜フェーズ画面 -->
+        <div id="night-screen" class="card" style="display:none;">
+            <h2>夜フェーズ</h2>
+            <p>あなたの役職（表示）: <strong id="my-role-display"></strong></p>
+            <div class="form-group">
+                <label>対象を選択</label>
+                <select id="action-target-select"></select>
             </div>
-
-            <!-- 待機フェーズ (初期表示) -->
-            <div id="lobby-phase" class="phase-section">
-                <h3>参加者一覧</h3>
-                <div class="player-list" id="lobby-players-list">読み込み中...</div>
-                
-                <!-- ホスト用ボタン -->
-                <div id="host-controls">
-                    <button class="btn-danger" onclick="handleStartGame()">ゲームを開始する</button>
-                </div>
-                <p id="waiting-message" class="hidden">ホストがゲームを開始するのを待っています...</p>
-                <button class="btn-secondary" style="margin-top:20px; background-color:#555;" onclick="handleLeaveRoom()">部屋を出る</button>
+            <div class="form-group">
+                <label>追加パラメータ (魔術師の役職予想など)</label>
+                <input type="text" id="action-extra-input" placeholder="必要な場合のみ入力">
             </div>
+            <button id="send-action-btn" class="btn btn-primary">行動を決定</button>
+        </div>
 
-            <!-- 夜フェーズ -->
-            <div id="night-phase" class="phase-section hidden">
-                <h3>🌙 夜の行動（訪問先選択）</h3>
-                <p>対象のプレイヤーの家を選択してください。</p>
-                <div class="input-group">
-                    <label for="night-target-select">訪問する家</label>
-                    <select id="night-target-select"></select>
-                </div>
-                
-                <div id="extra-action-input" class="input-group hidden">
-                    <label for="guess-role-select">予想する役職</label>
-                    <select id="guess-role-select">
-                        <option value="ドクター">ドクター</option>
-                        <option value="ポリス">ポリス</option>
-                        <option value="トラッパー">トラッパー</option>
-                        <option value="ルックアウト">ルックアウト</option>
-                        <option value="インベスティゲーター">インベスティゲーター</option>
-                        <option value="トラッカー">トラッカー</option>
-                        <option value="ブレイマー">ブレイマー</option>
-                        <option value="クリーナー">クリーナー</option>
-                        <option value="ボマー">ボマー</option>
-                        <option value="サバイバー">サバイバー</option>
-                        <option value="シーフ">シーフ</option>
-                    </select>
-                </div>
-
-                <button class="btn-warning" id="action-btn" onclick="handleSendAction()">行動を確定する</button>
-                <p id="action-status-msg" style="color: #2ecc71;"></p>
+        <!-- 昼・投票フェーズ画面 -->
+        <div id="day-screen" class="card" style="display:none;">
+            <h2>昼・投票フェーズ</h2>
+            <div id="night-report-box" class="alert-box"></div>
+            <div class="form-group">
+                <label>追放するプレイヤーを選択</label>
+                <select id="vote-target-select"></select>
             </div>
+            <button id="send-vote-btn" class="btn btn-danger">投票する</button>
+        </div>
 
-            <!-- 昼フェーズ -->
-            <div id="day-phase" class="phase-section hidden">
-                <h3>☀️ 昼の話し合い</h3>
-                <div id="night-results" class="role-box" style="font-size: 14px; text-align: left;"></div>
-                <div class="player-list" id="living-players-list"></div>
-            </div>
-
-            <!-- 投票フェーズ -->
-            <div id="vote-phase" class="phase-section hidden">
-                <h3>🗳️ 追放投票</h3>
-                <p>追放したいプレイヤーを選択してください。</p>
-                <div class="input-group">
-                    <label for="vote-target-select">投票先</label>
-                    <select id="vote-target-select"></select>
-                </div>
-                <button class="btn-danger" id="vote-btn" onclick="handleSendVote()">投票する</button>
-                <p id="vote-status-msg" style="color: #2ecc71;"></p>
-            </div>
-
-            <!-- 結果フェーズ -->
-            <div id="result-phase" class="phase-section hidden">
-                <h3>🏆 勝敗判定・種明かし</h3>
-                <div id="result-content" class="role-box" style="text-align: left; font-size: 14px;"></div>
-            </div>
+        <!-- 結果画面 -->
+        <div id="result-screen" class="card" style="display:none;">
+            <h2>ゲーム結果</h2>
+            <div id="game-result-text"></div>
         </div>
     </div>
 
