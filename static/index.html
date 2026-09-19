@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>おバカ人狼</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>おバカ人狼</h1>
+
+        <!-- ロビーパネル -->
+        <div id="lobbyPanel" class="card">
+            <h3>ゲームに参加</h3>
+            <input type="text" id="usernameInput" placeholder="あなたの名前" style="width: 95%; margin-bottom: 10px; padding: 8px;">
+            
+            <button onclick="handleCreateRoom()">部屋を新しく作成</button>
+            <hr style="margin: 15px 0;">
+            
+            <input type="text" id="roomCodeInput" placeholder="部屋コード（4文字）" style="width: 95%; margin-bottom: 10px; padding: 8px;">
+            <button onclick="handleJoinRoom()" style="background-color: #3498db;">部屋に入室</button>
+        </div>
+
+        <!-- メインゲームパネル -->
+        <div id="gamePanel" style="display: none;">
+            <div class="switch-panel">
+                <span>部屋コード: <strong id="displayRoomCode">-</strong></span>
+            </div>
+
+            <div class="card">
+                <h3>あなたの役職: <span id="roleName" class="role-badge">-</span></h3>
+                <p>現在のフェーズ: <strong id="phaseText">-</strong></p>
+                <p id="statusText"></p>
+                <div id="resultBox" class="result-box" style="display: none;"></div>
+            </div>
+
+            <div class="card" id="actionCard">
+                <div id="actionArea">
+                    <label for="targetSelect">対象を選択:</label>
+                    <select id="targetSelect"></select>
+                    <button id="actionBtn" onclick="handleActionSubmit()">送信</button>
+                </div>
+                <p id="submittedText" class="submitted-msg" style="display: none;">
+                    行動を受け付けました。他のプレイヤーの完了を待っています...
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
