@@ -41,9 +41,8 @@ class Room:
         self.host_id = None
         self.phase = "SETUP" # SETUP, NIGHT, DAY, VOTE, ENDED
         self.day_count = 1
-        self.day_timer = 60 # 昼の制限時間（秒）
+        self.day_timer = 60
         self.role_distribution = {role: 0 for role in ROLE_CONFIGS}
-        # デフォルトの配分
         self.role_distribution["doctor"] = 1
         self.role_distribution["police"] = 1
         self.role_distribution["investigator"] = 1
@@ -68,8 +67,9 @@ def create_room():
 
 @app.post("/api/room/{room_code}/join")
 def join_room(room_code: str, data: dict):
+    room_code = room_code.upper()
     if room_code not in rooms:
-        raise HTTPException(status_code=404, detail="部屋が見つかりません")
+        raise HTTPException(status_code=404, detail="指定された部屋が見つかりません。新しく作成してください。")
     room = rooms[room_code]
     name = data.get("name")
     if not name:
@@ -91,6 +91,9 @@ def join_room(room_code: str, data: dict):
 
 @app.post("/api/room/{room_code}/settings")
 def update_settings(room_code: str, data: dict):
+    room_code = room_code.upper()
+    if room_code not in rooms:
+        raise HTTPException(status_code=404, detail="部屋が見つかりません")
     room = rooms[room_code]
     if room.host_id != data.get("host_player_id"):
         raise HTTPException(status_code=403, detail="ホストのみ設定を変更できます")
@@ -102,6 +105,9 @@ def update_settings(room_code: str, data: dict):
 
 @app.post("/api/room/{room_code}/start")
 def start_game(room_code: str, data: dict):
+    room_code = room_code.upper()
+    if room_code not in rooms:
+        raise HTTPException(status_code=404, detail="部屋が見つかりません")
     room = rooms[room_code]
     if room.host_id != data.get("host_player_id"):
         raise HTTPException(status_code=403, detail="ホストのみ開始できます")
@@ -130,10 +136,16 @@ def start_game(room_code: str, data: dict):
 
 @app.get("/api/room/{room_code}/player/{player_id}")
 def get_player_info(room_code: str, player_id: str):
+    room_code = room_code.upper()
+    if room_code not in rooms:
+        raise HTTPException(status_code=404, detail="部屋が見つかりません")
     room = rooms[room_code]
+    
+    if player_id not in room.players:
+        raise HTTPException(status_code=404, detail="プレイヤーが見つかりません")
+    
     player = room.players[player_id]
     
-    # ターゲット候補（自分以外の生存者）＋「能力を使わない（パス）」選択肢
     targets = [{"id": p["id"], "name": p["name"]} for p in room.players.values() if p["id"] != player_id and p["alive"]]
     targets.insert(0, {"id": "pass", "name": "能力を使わない（パス）"})
 
@@ -153,9 +165,13 @@ def get_player_info(room_code: str, player_id: str):
 
 @app.post("/api/room/{room_code}/action")
 def send_action(room_code: str, data: dict):
+    room_code = room_code.upper()
+    if room_code not in rooms:
+        raise HTTPException(status_code=404, detail="部屋が見つかりません")
     room = rooms[room_code]
+    
     player_id = data.get("player_id")
-    target_id = data.get("target_id") # "pass" または 対象ID
+    target_id = data.get("target_id")
     room.actions[player_id] = target_id
     
     alive_players = [pid for pid, p in room.players.items() if p["alive"]]
@@ -164,7 +180,6 @@ def send_action(room_code: str, data: dict):
     return {"status": "success"}
 
 def resolve_night(room):
-    # パス処理や各能力の集計処理（夜明け）
     passed_count = sum(1 for target in room.actions.values() if target == "pass")
     room.message = f"夜が明けました。（昨晩パスしたプレイヤー数: {passed_count}人）"
     room.phase = "DAY"
@@ -172,7 +187,11 @@ def resolve_night(room):
 
 @app.post("/api/room/{room_code}/vote")
 def send_vote(room_code: str, data: dict):
+    room_code = room_code.upper()
+    if room_code not in rooms:
+        raise HTTPException(status_code=404, detail="部屋が見つかりません")
     room = rooms[room_code]
+    
     player_id = data.get("player_id")
     target_id = data.get("target_id")
     room.votes[player_id] = target_id
@@ -189,7 +208,7 @@ def resolve_voting(room):
             vote_counts[target] = vote_counts.get(target, 0) + 1
         
     alive_count = sum(1 for p in room.players.values() if p["alive"])
-    majority_threshold = alive_count / 2 # 過半数ルール
+    majority_threshold = alive_count / 2
     
     exiled = None
     if vote_counts:
