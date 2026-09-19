@@ -183,7 +183,6 @@
                     <label>挑発者 <input type="number" class="role-input" data-role="provoker" value="0" min="0"></label>
                     <label>トラッカー <input type="number" class="role-input" data-role="tracker" value="0" min="0"></label>
 
-                    <label style="color:#d9534f;font-weight:bold;">インポスター <input type="number" class="role-input" data-role="imposter" value="1" min="0"></label>
                     <label style="color:#d9534f;">ブレイマー <input type="number" class="role-input" data-role="blaimer" value="0" min="0"></label>
                     <label style="color:#d9534f;">クリーナー <input type="number" class="role-input" data-role="cleaner" value="0" min="0"></label>
 
@@ -295,10 +294,12 @@
                 <li><b>トラッカー</b>：対象が夜に訪れた家を確認。</li>
             </ul>
 
-            <h4 style="color:#d9534f;">【インポスター】</h4>
+            <h4 style="color:#d9534f;">【インポスター陣営】</h4>
             <ul>
-                <li><b>インポスター</b>：夜に1人を襲撃。</li>
-                <li><b>ブレイマー</b>：対象が死亡/追放された際、インポスター役職に見せる。2回使用。</li>
+                <li><b>インポスター</b>は独立した役職ではなく陣営。インポスター陣営のプレイヤーは、対象となるイノセント系役職を1つ持つ。</li>
+                <li><b>対象役職</b>：ねずみ / ポリス / トラッパー / ルックアウト / インベスティゲーター / 挑発者 / トラッカー。</li>
+                <li><b>対象外</b>：バカ / ドクター。</li>
+                <li><b>ブレイマー</b>：対象が死亡/追放された際、インポスター側の役職に見せる。2回使用。</li>
                 <li><b>クリーナー</b>：対象が死亡/追放された際、役職を不明にする。</li>
             </ul>
 

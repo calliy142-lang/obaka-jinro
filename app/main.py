@@ -29,7 +29,6 @@ ROLE_CONFIGS = {
     "provoker": {"camp": "innocent", "name": "挑発者"},
     "tracker": {"camp": "innocent", "name": "トラッカー"},
 
-    "imposter": {"camp": "imposter", "name": "インポスター"},
     "blaimer": {"camp": "imposter", "name": "ブレイマー"},
     "cleaner": {"camp": "imposter", "name": "クリーナー"},
 
@@ -56,6 +55,13 @@ FOOL_FAKE_ROLES = [
     "investigator", "tracker"
 ]
 
+# インポスター陣営が持てるイノセント系役職。
+# ドクターとバカはインポスター対象外。
+IMPOSTER_ELIGIBLE_INNOCENT_ROLES = [
+    "mouse", "police", "trapper", "lookout",
+    "investigator", "provoker", "tracker"
+]
+
 
 class Room:
     def __init__(self, room_code):
@@ -70,7 +76,6 @@ class Room:
         self.role_distribution["doctor"] = 1
         self.role_distribution["police"] = 1
         self.role_distribution["investigator"] = 1
-        self.role_distribution["imposter"] = 1
         self.faction_distribution = {"innocent": 2, "imposter": 1, "neutral": 0}
 
         self.actions = {}
@@ -137,7 +142,11 @@ def alive_ids(room):
 
 
 def get_camp(player):
-    return player.get("camp", ROLE_CONFIGS[player["role"]]["camp"])
+    camp = player.get("camp")
+    if camp:
+        return camp
+    role = player.get("role")
+    return ROLE_CONFIGS.get(role, {}).get("camp")
 
 
 def get_effective_role(player):
@@ -151,14 +160,14 @@ def role_is(player, role):
 def is_visiting_role(role):
     return role in {
         "doctor", "mouse", "police", "trapper", "lookout",
-        "investigator", "provoker", "tracker", "imposter",
+        "investigator", "provoker", "tracker",
         "blaimer", "cleaner", "serial_killer", "bomber",
         "thief", "ghost"
     }
 
 
 def is_attack_role(role):
-    return role in {"imposter", "serial_killer", "thief"}
+    return role in {"serial_killer", "thief"}
 
 
 def public_role_for(room, target):
@@ -285,9 +294,9 @@ def choose_roles_faction(room):
             "fool", "doctor", "mouse", "police", "trapper",
             "lookout", "investigator", "provoker", "tracker"
         ],
-        "imposter": [
-            "imposter", "blaimer", "cleaner", "mouse"
-        ],
+        # インポスターは独立した役職ではなく陣営。
+        # 必ずイノセント系の対象役職を1つ持つ。
+        "imposter": list(IMPOSTER_ELIGIBLE_INNOCENT_ROLES),
         "neutral": [
             "serial_killer", "bomber", "survivor", "thief",
             "ghost", "magician"
@@ -373,7 +382,7 @@ def check_role_action_valid(room, player, target, action):
 
     if role in {
         "mouse", "trapper", "lookout", "investigator",
-        "provoker", "tracker", "imposter", "blaimer",
+        "provoker", "tracker", "blaimer",
         "cleaner", "serial_killer", "thief", "ghost"
     }:
         if not target:
@@ -708,20 +717,7 @@ def resolve_night(room):
 
         role = get_effective_role(actor)
 
-        if role == "imposter":
-            if pid in blocked_by_police or pid in trapped_actor_ids:
-                continue
-
-            target = room.players.get(action.get("target_id"))
-            if target:
-                attacks.append({
-                    "attacker": actor,
-                    "target": target,
-                    "cause": "imposter",
-                    "doctor_savable": True
-                })
-
-        elif role == "serial_killer":
+        if role == "serial_killer":
             target = room.players.get(action.get("target_id"))
             if target:
                 attacks.append({

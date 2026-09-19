@@ -4,11 +4,7 @@ const API = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
-
-        if (!res.ok) {
-            throw new Error("部屋の作成に失敗しました");
-        }
-
+        if (!res.ok) throw new Error("部屋の作成に失敗しました");
         return await res.json();
     },
 
@@ -18,22 +14,16 @@ const API = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: playerName })
         });
-
         if (!res.ok) {
             const data = await res.json().catch(() => ({}));
             throw new Error(data.detail || "部屋への参加に失敗しました");
         }
-
         return await res.json();
     },
 
     async getPlayerInfo(roomCode, playerId) {
         const res = await fetch(`/api/room/${roomCode}/player/${playerId}`);
-
-        if (!res.ok) {
-            throw new Error("プレイヤー情報の取得に失敗しました");
-        }
-
+        if (!res.ok) throw new Error("プレイヤー情報の取得に失敗しました");
         return await res.json();
     },
 
@@ -92,9 +82,7 @@ const API = {
         const res = await fetch(`/api/room/${roomCode}/rematch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                host_player_id: hostPlayerId
-            })
+            body: JSON.stringify({ host_player_id: hostPlayerId })
         });
 
         if (!res.ok) {
@@ -109,9 +97,7 @@ const API = {
         const res = await fetch(`/api/room/${roomCode}/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                host_player_id: hostPlayerId
-            })
+            body: JSON.stringify({ host_player_id: hostPlayerId })
         });
 
         if (!res.ok) {
