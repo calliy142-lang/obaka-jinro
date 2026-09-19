@@ -84,6 +84,7 @@ class Room:
         self.public_events = []
         self.winner_faction = None
         self.winners = []
+        self.last_vote_result = None
         self.message = ""
 
         self.pending_mouse_reports = []
@@ -184,6 +185,10 @@ def display_role_for(player):
     if player["role"] == "fool":
         return role_name(player["displayed_role"])
     return role_name(player.get("stolen_role") or player["role"])
+
+
+def camp_name(camp):
+    return {"innocent": "イノセント", "imposter": "インポスター", "neutral": "ニュートラル"}.get(camp, "不明")
 
 
 def create_player(name, player_id, is_host=False):
@@ -1093,6 +1098,7 @@ def reset_room_for_rematch(room):
 
     room.winner_faction = None
     room.winners = []
+    room.last_vote_result = None
     room.message = "再戦準備完了。ホストがゲームを開始できます。"
 
     room.ghost_revenge_pending = False
@@ -1343,8 +1349,9 @@ async def get_player_info(room_code: str, player_id: str):
 
         "alive": player["alive"],
 
-        # Never expose true role here.
         "displayed_role": display_role_for(player),
+        "camp": get_camp(player) if room.phase != "SETUP" else None,
+        "camp_name": camp_name(get_camp(player)) if room.phase != "SETUP" else None,
 
         "targets": targets,
 
@@ -1361,6 +1368,8 @@ async def get_player_info(room_code: str, player_id: str):
 
         "winner_faction": room.winner_faction,
         "winners": list(room.winners),
+        "last_vote_result": room.last_vote_result,
+        "result_players": ([{"id": p["id"], "name": p["name"], "role": role_name(p.get("role")), "camp": camp_name(p.get("camp")), "alive": p["alive"]} for p in room.players.values()] if room.phase == "RESULT" else []),
     }
 
 
@@ -1518,9 +1527,21 @@ def resolve_voting(room):
                 weighted_votes.get(target["id"], 0) + bonus
             )
 
+    raw_votes = []
+    for voter_id, target_id in room.votes.items():
+        voter = room.players.get(voter_id)
+        target = room.players.get(target_id) if target_id in room.players else None
+        raw_votes.append({"voter": voter["name"] if voter else voter_id, "target": target["name"] if target else ("棄権" if target_id == "pass" else str(target_id))})
+    room.last_vote_result = {
+        "votes": raw_votes,
+        "weighted_votes": [{"name": room.players[pid]["name"], "votes": count} for pid, count in weighted_votes.items() if pid in room.players],
+        "expelled": None,
+        "status": "pending",
+    }
     room.votes = {}
 
     if not weighted_votes:
+        room.last_vote_result["status"] = "no_exile"
         room.message = "投票は棄権されました。追放者はいません。"
         for p in alive:
             p["provoked_bonus"] = 0
@@ -1537,6 +1558,7 @@ def resolve_voting(room):
 
     # Tie => nobody is expelled.
     if len(leaders) != 1:
+        room.last_vote_result["status"] = "tie"
         room.message = "最多票が同数だったため、誰も追放されませんでした。"
 
         for p in alive:
@@ -1550,6 +1572,8 @@ def resolve_voting(room):
         return
 
     expelled = room.players[leaders[0]]
+    room.last_vote_result["status"] = "expelled"
+    room.last_vote_result["expelled"] = {"id": expelled["id"], "name": expelled["name"]}
 
     # Ghost special handling.
     if expelled["role"] == "ghost":

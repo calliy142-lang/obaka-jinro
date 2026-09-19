@@ -243,10 +243,27 @@ function renderResultActions(info) {
     const panel = document.getElementById("resultActions"); if (!panel) return;
     if (info.phase !== "RESULT") { panel.style.display = "none"; return; }
     panel.style.display = "block";
-    let winner = info.winner_faction || "結果";
-    const names = { innocent: "イノセント", imposter: "インポスター", neutral: "ニュートラル", survivor: "サバイバー", draw: "引き分け" };
-    if (names[winner]) winner = names[winner];
+    const names = { innocent:"イノセント", imposter:"インポスター", neutral:"ニュートラル", serial_killer:"シリアルキラー", bomber:"ボマー", ghost:"ゴースト", draw:"引き分け" };
+    let winner = names[info.winner_faction] || info.winner_faction || "結果";
     const winnerText = document.getElementById("resultWinnerText"); if (winnerText) winnerText.innerText = `勝利: ${winner}`;
+    const voteBox = document.getElementById("resultVoteText");
+    const vr = info.last_vote_result;
+    if (voteBox) {
+        if (vr && vr.expelled) voteBox.innerText = `直前の投票: ${vr.expelled.name} が追放されました`;
+        else if (vr && vr.status === "tie") voteBox.innerText = "直前の投票: 同票のため追放者なし";
+        else if (vr && vr.status === "no_exile") voteBox.innerText = "直前の投票: 追放者なし";
+        else voteBox.innerText = "直前の投票: 今回の決着は投票以外で発生しました";
+    }
+    const list = document.getElementById("resultPlayersList");
+    if (list) {
+        list.innerHTML = "";
+        (info.result_players || []).forEach(p => {
+            const row = document.createElement("div");
+            row.style.cssText = "display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:8px;padding:8px 10px;border-bottom:1px solid #ddd;align-items:center;";
+            [p.name,p.camp,p.role,p.alive ? "生存" : "死亡"].forEach(v => { const span=document.createElement("span"); span.innerText=v; row.appendChild(span); });
+            list.appendChild(row);
+        });
+    }
     const button = document.getElementById("rematchButton"); if (button) button.style.display = info.is_host ? "block" : "none";
     const waiting = document.getElementById("rematchWaitingText"); if (waiting) waiting.style.display = info.is_host ? "none" : "block";
 }
@@ -289,7 +306,7 @@ async function updateGameState() {
     try {
         const info = await API.getPlayerInfo(currentRoomCode, currentPlayerId);
         document.getElementById("phaseText").innerText = `現在のフェーズ: ${info.phase} / ${info.day_count}日目`;
-        const roleName = document.getElementById("roleName"); roleName.innerText = `あなたの役職: ${info.displayed_role}`; roleName.dataset.role = info.displayed_role;
+        const roleName = document.getElementById("roleName"); roleName.innerText = `あなたの役職: ${info.displayed_role}（${info.camp_name || "陣営不明"}陣営）`; roleName.dataset.role = info.displayed_role;
         document.getElementById("statusText").innerText = info.alive ? "状態: 生存" : "状態: 死亡";
         renderParticipants(info);
         const resultBox = document.getElementById("resultBox");

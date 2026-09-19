@@ -136,6 +136,11 @@
              style="display:none;border:2px solid #28a745;text-align:center;">
             <h3 style="margin-top:0;">ゲーム終了</h3>
             <p id="resultWinnerText" style="font-weight:bold;"></p>
+            <p id="resultVoteText" style="font-weight:bold;margin:8px 0;color:#b02a37;"></p>
+            <div style="text-align:left;margin:14px 0;border:1px solid #ddd;border-radius:6px;overflow:hidden;">
+                <div style="display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:8px;padding:8px 10px;background:#f1f3f5;font-weight:bold;"><span>プレイヤー</span><span>陣営</span><span>役職</span><span>状態</span></div>
+                <div id="resultPlayersList"></div>
+            </div>
 
             <button id="rematchButton"
                     onclick="handleRematch()"
