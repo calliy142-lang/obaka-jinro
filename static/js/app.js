@@ -6,6 +6,10 @@ let selectedNightTarget = "pass";
 let selectedAttackTarget = "pass";
 let nightUiBuilt = false;
 let nightUiPhase = null;
+let selectedVoteTarget = "pass";
+let voteOptionIds = "";
+let lastRenderedPhase = null;
+let dayTimerInterval = null;
 
 function switchMode(mode) {
     // 旧UIとの互換用。現在は陣営＋個別役職を同時に設定します。
@@ -64,6 +68,8 @@ function showGameScreen() {
 }
 
 function leaveRoom() {
+    if (dayTimerInterval) { clearInterval(dayTimerInterval); dayTimerInterval = null; }
+    lastRenderedPhase = null;
     if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
     localStorage.removeItem("roomCode"); localStorage.removeItem("playerId");
     currentRoomCode = null; currentPlayerId = null;
@@ -256,13 +262,40 @@ function renderPrivateReports(info) {
 }
 
 function renderVoteArea(info) {
-    const voteArea = document.getElementById("voteArea"); const voteSelect = document.getElementById("voteSelect");
+    const voteArea = document.getElementById("voteArea");
+    const voteSelect = document.getElementById("voteSelect");
+    const votedText = document.getElementById("votedText");
     if (!voteArea || !voteSelect) return;
-    if (info.phase !== "DAY" || !info.alive || info.vote_submitted) { voteArea.style.display = "none"; return; }
-    voteSelect.innerHTML = "";
-    const pass = document.createElement("option"); pass.value = "pass"; pass.innerText = "棄権"; voteSelect.appendChild(pass);
-    info.targets.forEach(t => { if (t.id === "pass") return; const opt = document.createElement("option"); opt.value = t.id; opt.innerText = t.name; voteSelect.appendChild(opt); });
+    if (info.phase !== "DAY" || !info.alive) {
+        voteArea.style.display = "none";
+        if (votedText && info.phase !== "DAY") votedText.style.display = "none";
+        return;
+    }
+    if (info.vote_submitted) {
+        voteArea.style.display = "none";
+        if (votedText) votedText.style.display = "block";
+        return;
+    }
+    const optionIds = ["pass", ...(info.targets || []).filter(t => t.id !== "pass").map(t => t.id)].join(",");
+    if (voteSelect.dataset.optionIds !== optionIds) {
+        const keep = voteSelect.value || selectedVoteTarget || "pass";
+        voteSelect.innerHTML = "";
+        const pass = document.createElement("option");
+        pass.value = "pass"; pass.innerText = "棄権"; voteSelect.appendChild(pass);
+        (info.targets || []).forEach(t => {
+            if (t.id === "pass") return;
+            const opt = document.createElement("option");
+            opt.value = t.id; opt.innerText = t.name; voteSelect.appendChild(opt);
+        });
+        voteSelect.dataset.optionIds = optionIds;
+        selectedVoteTarget = [...voteSelect.options].some(o => o.value === keep) ? keep : "pass";
+        voteSelect.value = selectedVoteTarget;
+    } else if (selectedVoteTarget && [...voteSelect.options].some(o => o.value === selectedVoteTarget)) {
+        voteSelect.value = selectedVoteTarget;
+    }
+    voteSelect.onchange = () => { selectedVoteTarget = voteSelect.value; };
     voteArea.style.display = "block";
+    if (votedText) votedText.style.display = "none";
 }
 
 async function handleVoteSubmit() {
@@ -302,7 +335,39 @@ function renderParticipants(info) {
 }
 
 function resetDayUI() {
+    selectedVoteTarget = "pass";
+    const voteSelect = document.getElementById("voteSelect");
+    if (voteSelect) { voteSelect.dataset.optionIds = ""; voteSelect.value = "pass"; }
     const votedText = document.getElementById("votedText"); if (votedText) votedText.style.display = "none";
+}
+
+function renderDayTimer(info) {
+    const box = document.getElementById("dayTimerDisplay");
+    if (!box) return;
+    if (info.phase !== "DAY") {
+        box.style.display = "none";
+        if (dayTimerInterval) { clearInterval(dayTimerInterval); dayTimerInterval = null; }
+        return;
+    }
+    box.style.display = "block";
+    let remaining = Math.max(0, Number(info.day_timer_remaining ?? info.day_timer ?? 0));
+    const render = () => {
+        const sec = Math.max(0, Math.ceil(remaining));
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        box.innerText = `昼の残り時間: ${m}:${String(s).padStart(2, "0")}`;
+    };
+    render();
+    if (dayTimerInterval) clearInterval(dayTimerInterval);
+    dayTimerInterval = setInterval(() => {
+        remaining -= 1;
+        render();
+        if (remaining <= 0) {
+            clearInterval(dayTimerInterval);
+            dayTimerInterval = null;
+            updateGameState();
+        }
+    }, 1000);
 }
 
 function renderResultActions(info) {
@@ -390,7 +455,11 @@ async function updateGameState() {
             const showNightEnd = Boolean(info.is_host && info.phase === "NIGHT");
             nightEndArea.style.display = showNightEnd ? "block" : "none";
         }
-        resetDayUI();
+        if (lastRenderedPhase !== info.phase) {
+            if (info.phase === "DAY") resetDayUI();
+            lastRenderedPhase = info.phase;
+        }
+        renderDayTimer(info);
         if (info.phase !== "NIGHT") {
             selectedNightTarget = "pass";
             selectedAttackTarget = "pass";
