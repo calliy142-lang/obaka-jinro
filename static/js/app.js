@@ -4,6 +4,8 @@ let pollInterval = null;
 let currentDistMode = "individual";
 let selectedNightTarget = "pass";
 let selectedAttackTarget = "pass";
+let nightUiBuilt = false;
+let nightUiPhase = null;
 
 function switchMode(mode) {
     // 旧UIとの互換用。現在は陣営＋個別役職を同時に設定します。
@@ -115,85 +117,103 @@ function buildRoleActionUI(info) {
     const attackSelect = document.getElementById("attackTargetSelect");
     const extraArea = document.getElementById("extraActionArea");
     const actionHelp = document.getElementById("actionHelp");
+    if (!targetSelect || !extraArea || !actionHelp) return;
+
     actionRoleText.innerText = `${info.displayed_role} の夜アクション`;
 
-    // ポーリングのたびにselectを再生成しても、ユーザーが選んだ値を
-    // 「何もしない」に勝手に戻さない。DOMのvalueだけに依存せず保持する。
-    if (targetSelect.value && info.targets.some(t => t.id === targetSelect.value)) {
-        selectedNightTarget = targetSelect.value;
+    // 一度作ったselectを毎ポーリングで作り直さない。
+    // これが「選んだ対象が何もしないへ戻る」原因にならないようにする本命対策。
+    const targetIds = info.targets.map(t => t.id).join("|");
+    if (targetSelect.dataset.optionIds !== targetIds) {
+        const current = targetSelect.value || selectedNightTarget;
+        targetSelect.innerHTML = "";
+        info.targets.forEach(t => {
+            const opt = document.createElement("option");
+            opt.value = t.id;
+            opt.innerText = t.name;
+            targetSelect.appendChild(opt);
+        });
+        targetSelect.dataset.optionIds = targetIds;
+        const keep = info.targets.some(t => t.id === selectedNightTarget)
+            ? selectedNightTarget
+            : (info.targets.some(t => t.id === current) ? current : "pass");
+        selectedNightTarget = keep;
+        targetSelect.value = keep;
+    } else if (info.targets.some(t => t.id === selectedNightTarget)) {
+        targetSelect.value = selectedNightTarget;
     }
-    targetSelect.innerHTML = "";
-    info.targets.forEach(t => {
-        const opt = document.createElement("option"); opt.value = t.id; opt.innerText = t.name;
-        targetSelect.appendChild(opt);
-    });
-    targetSelect.value = info.targets.some(t => t.id === selectedNightTarget) ? selectedNightTarget : "pass";
     targetSelect.onchange = () => { selectedNightTarget = targetSelect.value; };
 
-    // インポスター陣営だけ、役職能力とは別に襲撃対象を選択できる。
+    // インポスター陣営は役職能力とは別に必ず襲撃欄を持つ。
     if (attackArea && attackSelect) {
-        if (info.is_imposter) {
+        if (info.is_imposter && info.phase === "NIGHT") {
             attackArea.style.display = "block";
-            if (attackSelect.value && info.attack_targets.some(t => t.id === attackSelect.value)) {
-                selectedAttackTarget = attackSelect.value;
+            const attackIds = info.attack_targets.map(t => t.id).join("|");
+            if (attackSelect.dataset.optionIds !== attackIds) {
+                const current = attackSelect.value || selectedAttackTarget;
+                attackSelect.innerHTML = "";
+                const pass = document.createElement("option");
+                pass.value = "pass";
+                pass.innerText = "襲撃しない";
+                attackSelect.appendChild(pass);
+                info.attack_targets.forEach(t => {
+                    const opt = document.createElement("option");
+                    opt.value = t.id;
+                    opt.innerText = t.name;
+                    attackSelect.appendChild(opt);
+                });
+                attackSelect.dataset.optionIds = attackIds;
+                const keep = info.attack_targets.some(t => t.id === selectedAttackTarget)
+                    ? selectedAttackTarget
+                    : (info.attack_targets.some(t => t.id === current) ? current : "pass");
+                selectedAttackTarget = keep;
+                attackSelect.value = keep;
+            } else if (info.attack_targets.some(t => t.id === selectedAttackTarget)) {
+                attackSelect.value = selectedAttackTarget;
             }
-            attackSelect.innerHTML = "";
-            const pass = document.createElement("option"); pass.value = "pass"; pass.innerText = "襲撃しない"; attackSelect.appendChild(pass);
-            info.attack_targets.forEach(t => {
-                const opt = document.createElement("option"); opt.value = t.id; opt.innerText = t.name;
-                attackSelect.appendChild(opt);
-            });
-            attackSelect.value = info.attack_targets.some(t => t.id === selectedAttackTarget) ? selectedAttackTarget : "pass";
             attackSelect.onchange = () => { selectedAttackTarget = attackSelect.value; };
         } else {
             attackArea.style.display = "none";
         }
     }
 
-    extraArea.innerHTML = ""; actionHelp.innerText = "";
     const role = info.displayed_role;
-
-    if (role === "魔術師") {
-        actionHelp.innerText = "ターゲットの役職を予想してください。正解ならターゲットを殺害、外れると自分が死亡します。";
-        const label = document.createElement("label"); label.innerText = "予想役職: ";
-        const select = document.createElement("select"); select.id = "roleGuessSelect"; select.style.padding = "6px";
-        MAGICIAN_GUESS_ROLES.forEach(([id, name]) => {
-            const opt = document.createElement("option"); opt.value = id; opt.innerText = name; select.appendChild(opt);
-        });
-        label.appendChild(select); extraArea.appendChild(label);
+    const roleKey = `${info.phase}|${role}|${info.is_imposter}|${info.ability_uses_remaining?.[role] ?? ""}`;
+    if (extraArea.dataset.roleKey !== roleKey) {
+        extraArea.innerHTML = "";
+        actionHelp.innerText = "";
+        if (role === "魔術師") {
+            actionHelp.innerText = "ターゲットの役職を予想してください。正解ならターゲットを殺害、外れると自分が死亡します。";
+            const label = document.createElement("label"); label.innerText = "予想役職: ";
+            const select = document.createElement("select"); select.id = "roleGuessSelect"; select.style.padding = "6px";
+            MAGICIAN_GUESS_ROLES.forEach(([id, name]) => { const opt=document.createElement("option"); opt.value=id; opt.innerText=name; select.appendChild(opt); });
+            label.appendChild(select); extraArea.appendChild(label);
+        } else if (role === "ボマー") {
+            actionHelp.innerText = "爆弾を仕掛けるか、すでに仕掛けた爆弾を起爆します。";
+            const select=document.createElement("select"); select.id="bombModeSelect"; select.style.padding="6px";
+            const plant=document.createElement("option"); plant.value="plant"; plant.innerText="爆弾を仕掛ける";
+            const detonate=document.createElement("option"); detonate.value="detonate"; detonate.innerText="爆弾を起爆する";
+            select.appendChild(plant); select.appendChild(detonate); extraArea.appendChild(select);
+        }
+        const helps={
+            "シーフ":"選択したプレイヤーを殺害し、その役職を盗みます。","ねずみ":"1回だけ使用できます。調査結果は次の昼に全員へ公表されます。",
+            "挑発者":"対象の次の昼の票数を+2します。残り2回まで使用できます。","ドクター":"対象が夜に死亡した場合、蘇生できます。同じ対象を2夜連続では選べません。",
+            "ポリス":"対象の夜能力を封じます。同じ対象を2夜連続では選べません。","トラッパー":"対象の家に罠を仕掛け、そこを訪れた人のうち1人をランダムに封じます。",
+            "ルックアウト":"対象の家を訪れたプレイヤーを確認します。","インベスティゲーター":"対象の役職候補を2つに絞り込みます。",
+            "トラッカー":"対象が夜に訪れた家を確認します。","ゴースト":"対象の家にろうそくを置き、投票で追放された場合は次の夜に復讐します。",
+            "バカ":"あなたには別のイノセント役職に見えていますが、実際には能力を持ちません。","ブレイマー":"対象の死亡・追放時の役職表示をインポスターに見せます。残り2回まで使用できます。",
+            "クリーナー":"対象が死亡・追放された際、その役職を不明にします。","シリアルキラー":"対象を殺害します。ポリスやトラッパーでは止まりません。",
+            "サバイバー":"夜の行動はありません。殺害されても最大3回まで復活します。"
+        };
+        if (helps[role]) actionHelp.innerText = helps[role];
+        extraArea.dataset.roleKey = roleKey;
     }
-    if (role === "ボマー") {
-        actionHelp.innerText = "爆弾を仕掛けるか、すでに仕掛けた爆弾を起爆します。";
-        const select = document.createElement("select"); select.id = "bombModeSelect"; select.style.padding = "6px";
-        const plant = document.createElement("option"); plant.value = "plant"; plant.innerText = "爆弾を仕掛ける";
-        const detonate = document.createElement("option"); detonate.value = "detonate"; detonate.innerText = "爆弾を起爆する";
-        select.appendChild(plant); select.appendChild(detonate); extraArea.appendChild(select);
-    }
-    const helps = {
-        "シーフ": "選択したプレイヤーを殺害し、その役職を盗みます。",
-        "ねずみ": "1回だけ使用できます。調査結果は次の昼に全員へ公表されます。",
-        "挑発者": "対象の次の昼の票数を+2します。残り2回まで使用できます。",
-        "ドクター": "対象が夜に死亡した場合、蘇生できます。同じ対象を2夜連続では選べません。",
-        "ポリス": "対象の夜能力を封じます。同じ対象を2夜連続では選べません。",
-        "トラッパー": "対象の家に罠を仕掛け、そこを訪れた人のうち1人をランダムに封じます。",
-        "ルックアウト": "対象の家を訪れたプレイヤーを確認します。",
-        "インベスティゲーター": "対象の役職候補を2つに絞り込みます。",
-        "トラッカー": "対象が夜に訪れた家を確認します。",
-        "ゴースト": "対象の家にろうそくを置き、投票で追放された場合は次の夜に復讐します。",
-        "バカ": "あなたには別のイノセント役職に見えていますが、実際には能力を持ちません。",
-        "ブレイマー": "対象の死亡・追放時の役職表示をインポスターに見せます。残り2回まで使用できます。",
-        "クリーナー": "対象が死亡・追放された際、その役職を不明にします。",
-        "シリアルキラー": "対象を殺害します。ポリスやトラッパーでは止まりません。",
-        "サバイバー": "夜の行動はありません。殺害されても最大3回まで復活します。",
-        "インベスティゲーター": "対象の役職候補を2つに絞り込みます。"
-    };
-    if (helps[role]) actionHelp.innerText = helps[role];
 }
 
 async function handleActionSubmit() {
     const action = {
-        target_id: document.getElementById("targetSelect").value,
-        attack_target_id: selectedAttackTarget
+        target_id: document.getElementById("targetSelect").value || selectedNightTarget || "pass",
+        attack_target_id: document.getElementById("attackTargetSelect")?.value || selectedAttackTarget || "pass"
     };
     const guessSelect = document.getElementById("roleGuessSelect");
     if (guessSelect) action.guessed_role = guessSelect.value;
@@ -298,7 +318,7 @@ function renderResultActions(info) {
         (info.result_players || []).forEach(p => {
             const row = document.createElement("div");
             row.style.cssText = "display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:8px;padding:8px 10px;border-bottom:1px solid #ddd;align-items:center;";
-            [p.name,p.camp,p.role,p.alive ? "生存" : "死亡"].forEach(v => { const span=document.createElement("span"); span.innerText=v; row.appendChild(span); });
+            [p.name, p.camp || "陣営不明", p.role || "不明", p.alive ? "生存" : "死亡"].forEach(v => { const span=document.createElement("span"); span.innerText=v; row.appendChild(span); });
             list.appendChild(row);
         });
     }
@@ -344,6 +364,7 @@ async function updateGameState() {
     try {
         const info = await API.getPlayerInfo(currentRoomCode, currentPlayerId);
         document.getElementById("phaseText").innerText = `現在のフェーズ: ${info.phase} / ${info.day_count}日目`;
+        document.body.dataset.uiVersion = info.ui_version || "unknown";
         const roleName = document.getElementById("roleName");
         const campText = info.camp_name || (info.camp === "innocent" ? "イノセント" : info.camp === "imposter" ? "インポスター" : info.camp === "neutral" ? "ニュートラル" : "陣営不明");
         roleName.innerText = `あなたの役職: ${info.displayed_role}（${campText}陣営）`;
@@ -365,9 +386,19 @@ async function updateGameState() {
         if (info.phase !== "NIGHT") {
             selectedNightTarget = "pass";
             selectedAttackTarget = "pass";
+            nightUiBuilt = false;
+            nightUiPhase = info.phase;
+            const ts=document.getElementById("targetSelect"); if(ts) ts.dataset.optionIds="";
+            const as=document.getElementById("attackTargetSelect"); if(as) as.dataset.optionIds="";
         }
         if (info.phase === "NIGHT" && info.alive && !info.action_submitted) {
-            buildRoleActionUI(info); document.getElementById("actionArea").style.display = "block"; document.getElementById("submittedText").style.display = "none";
+            if (nightUiPhase !== "NIGHT") {
+                nightUiPhase = "NIGHT";
+                nightUiBuilt = true;
+            }
+            buildRoleActionUI(info);
+            document.getElementById("actionArea").style.display = "block";
+            document.getElementById("submittedText").style.display = "none";
         } else document.getElementById("actionArea").style.display = "none";
         if (info.phase === "DAY") renderVoteArea(info); else { const v = document.getElementById("voteArea"); if (v) v.style.display = "none"; }
         if (info.phase === "RESULT") { const v = document.getElementById("voteArea"); if (v) v.style.display = "none"; document.getElementById("actionArea").style.display = "none"; }

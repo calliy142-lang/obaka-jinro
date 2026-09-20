@@ -9,6 +9,15 @@ import uuid
 
 app = FastAPI()
 
+# 開発中のブラウザキャッシュで古いJS/HTMLが残らないようにする。
+@app.middleware("http")
+async def no_cache_dev_files(request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
 # main.py は obaka_jinro/app/、static は obaka_jinro/static/ にあるため、
 # 起動したカレントディレクトリに依存しないパスにする。
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -1211,6 +1220,7 @@ async def join_room(room_code: str, data: Dict[str, Any]):
         room.host_id = player_id
 
     return {
+        "ui_version": "v6-fixed",
         "room_code": room.room_code,
         "player_id": player_id,
         "is_host": is_host
