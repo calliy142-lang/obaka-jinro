@@ -1,104 +1,99 @@
-body {
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    background-color: #f4f6f9;
-    color: #333;
-    max-width: 600px;
-    margin: 30px auto;
-    padding: 20px;
-}
+/* UI overflow / responsive layout fixes */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+body { margin: 0; }
 
 .container {
-    background: #ffffff;
-    padding: 25px;
-    border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    width: min(720px, calc(100% - 24px));
+    max-width: 720px;
+    overflow-x: hidden;
 }
 
-h1 {
-    text-align: center;
-    color: #2c3e50;
-    margin-bottom: 20px;
+.panel, section, .private-report, #resultBox, #resultActions, #actionArea, #voteArea, #hostControls {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
-.switch-panel {
-    background: #eef2f7;
-    padding: 12px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+select, input, button, textarea {
+    max-width: 100%;
+    min-width: 0;
+    font: inherit;
 }
 
-.card {
-    background: #fafafa;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 18px;
-    margin-bottom: 20px;
-}
-
-.role-badge {
-    display: inline-block;
-    background: #3498db;
-    color: white;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 1.1em;
-    font-weight: bold;
-}
-
-.status-dead {
-    color: #e74c3c;
-    font-weight: bold;
-}
-
-.status-alive {
-    color: #2ecc71;
-    font-weight: bold;
-}
-
-.result-box {
-    margin-top: 10px;
-    padding: 10px;
-    background: #fff8e1;
-    border-left: 4px solid #f1c40f;
-    font-weight: bold;
-}
-
-select, button {
+select {
     width: 100%;
-    padding: 10px;
-    margin-top: 8px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    font-size: 1em;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-button {
-    background-color: #2ecc71;
-    color: white;
-    border: none;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background 0.2s;
+.role-grid {
+    width: 100%;
 }
 
-button:hover {
-    background-color: #27ae60;
+.role-grid label {
+    min-width: 0;
 }
 
-button.reset-btn {
-    background-color: #95a5a6;
-    margin-top: 15px;
+.role-grid label > select,
+.role-grid .role-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    max-width: 100%;
 }
 
-button.reset-btn:hover {
-    background-color: #7f8c8d;
+/* 結果画面の役職・陣営名が長くても横にはみ出さない */
+#resultActions [style*="grid-template-columns"],
+#resultPlayersList > div {
+    min-width: 0;
 }
 
-.submitted-msg {
-    color: #2980b9;
-    font-weight: bold;
-    text-align: center;
+#resultActions span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* 長いプレイヤー名・役職名・メッセージ */
+#participantsList > div,
+#privateReportBox,
+#resultBox,
+#resultVoteText,
+#resultWinnerText,
+#actionHelp,
+#actionRoleText,
+#statusText,
+#phaseText {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* スマホでは設定カードを1列にして、横スクロールを発生させない */
+@media (max-width: 700px) {
+    .role-grid { grid-template-columns: 1fr 1fr !important; }
+}
+
+@media (max-width: 480px) {
+    .container {
+        width: calc(100% - 16px);
+        padding: 12px !important;
+        margin: 8px auto;
+    }
+
+    .role-grid { grid-template-columns: 1fr !important; }
+
+    #resultActions > div[style*="grid-template-columns"]:first-of-type {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    #resultPlayersList > div {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    #resultPlayersList > div span:nth-child(3) {
+        grid-column: 1 / -1;
+    }
 }

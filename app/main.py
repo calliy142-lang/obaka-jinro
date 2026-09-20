@@ -999,6 +999,16 @@ def check_win_condition(room):
         _set_result_message(room, "ボマーの勝利！")
         return True
 
+    # サバイバーは「ゲーム終了時に生存している」ことが勝利条件。
+    # 夜の処理で他プレイヤーが全員死亡した場合も、ここで即時に決着させる。
+    survivors = [p for p in alive if get_effective_role(p) == "survivor"]
+    if len(alive) == 1 and survivors:
+        room.phase = "RESULT"
+        room.winner_faction = "survivor"
+        room.winners = [p["name"] for p in survivors]
+        _set_result_message(room, "サバイバーの勝利！")
+        return True
+
     if not imposters and not neutrals:
         room.phase = "RESULT"
         room.winner_faction = "innocent"

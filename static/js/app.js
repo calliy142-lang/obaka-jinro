@@ -374,7 +374,7 @@ function renderResultActions(info) {
     const panel = document.getElementById("resultActions"); if (!panel) return;
     if (info.phase !== "RESULT") { panel.style.display = "none"; return; }
     panel.style.display = "block";
-    const names = { innocent:"イノセント", imposter:"インポスター", neutral:"ニュートラル", serial_killer:"シリアルキラー", bomber:"ボマー", ghost:"ゴースト", draw:"引き分け" };
+    const names = { innocent:"イノセント", imposter:"インポスター", neutral:"ニュートラル", serial_killer:"シリアルキラー", bomber:"ボマー", survivor:"サバイバー", ghost:"ゴースト", draw:"引き分け" };
     let winner = names[info.winner_faction] || info.winner_faction || "結果";
     const winnerText = document.getElementById("resultWinnerText"); if (winnerText) winnerText.innerText = `勝利: ${winner}`;
     const voteBox = document.getElementById("resultVoteText");
