@@ -673,9 +673,14 @@ def resolve_night(room):
             else:
                 result = f"{target['name']} は {role_name(actual_role)} / {actual_camp}"
 
+            # ねずみの調査結果は本人だけに通知する。
+            # 全体には「ねずみの能力が使用された」ことだけ公開して、
+            # 誰が誰を調査したか・何が分かったかは駆け引きとして残す。
             actor["mouse_results"].append(result)
-            room.pending_mouse_reports.append(
-                f"{actor['name']} がねずみの調査を使用しました: {result}"
+            add_report(actor, result)
+            add_public_report(
+                room,
+                "ねずみの能力が使用されました。"
             )
 
         elif role == "investigator":
@@ -1012,9 +1017,7 @@ def resolve_night(room):
         if role == "police":
             actor["last_target"] = action.get("target_id")
 
-    # Public reports from mouse.
-    for report in room.pending_mouse_reports:
-        add_public_report(room, report)
+    # Mouse results are private; only the ability-use notice is public.
     room.pending_mouse_reports.clear()
 
     # Investigator reports are private.
