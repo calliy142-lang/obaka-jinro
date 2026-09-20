@@ -82,6 +82,7 @@ class Room:
         self.day_timer = 600
         self.distribution_mode = "individual"
         self.role_distribution = {role: 0 for role in ROLE_CONFIGS}
+        self.excluded_roles = set()
         self.role_distribution["doctor"] = 1
         self.role_distribution["police"] = 1
         self.role_distribution["investigator"] = 1
@@ -112,6 +113,7 @@ class SettingsRequest(BaseModel):
     distribution_mode: Optional[str] = "individual"
     role_distribution: Optional[Dict[str, int]] = None
     faction_distribution: Optional[Dict[str, int]] = None
+    excluded_roles: Optional[List[str]] = None
 
 
 class StartRequest(BaseModel):
@@ -286,6 +288,10 @@ def _validate_distribution(room):
 
     role_counts = {role: max(0, int(room.role_distribution.get(role, 0)))
                    for role in ROLE_CONFIGS}
+    excluded_roles = set(room.excluded_roles)
+    for role in excluded_roles:
+        if role in role_counts:
+            role_counts[role] = 0
 
     # 個別指定は「第2優先」。指定役職が陣営枠を超える場合は開始不可。
     fixed_by_camp = {"innocent": 0, "imposter": 0, "neutral": 0}
@@ -340,6 +346,10 @@ def choose_roles_combined(room):
 
     role_counts = {role: max(0, int(room.role_distribution.get(role, 0)))
                    for role in ROLE_CONFIGS}
+    excluded_roles = set(room.excluded_roles)
+    for role in excluded_roles:
+        if role in role_counts:
+            role_counts[role] = 0
     assigned = {camp: [] for camp in faction_players}
 
     # 1) 固定陣営の個別指定。
@@ -687,23 +697,33 @@ def resolve_night(room):
             target_role = target["role"]
             target_camp = get_camp(target)
 
+            # インベスティゲーターは「正しい役職＋間違った役職」の2候補。
+            # 候補だけ見ても陣営が分かるよう、各候補に陣営を付ける。
+            # 対象がイノセントなら、誤候補はインポスターまたはニュートラル。
             if target_camp == "innocent":
+                wrong_camp = random.choice(["imposter", "neutral"])
                 wrong_pool = [
                     r for r in ROLE_CONFIGS
-                    if ROLE_CONFIGS[r]["camp"] in {"imposter", "neutral"}
+                    if _role_allowed_in_camp(r, wrong_camp)
+                    and r != target_role
                 ]
+                wrong = random.choice(wrong_pool)
+                wrong_label = f"{role_name(wrong)}（{camp_name(wrong_camp)}）"
             else:
                 wrong_pool = [
                     r for r in ROLE_CONFIGS
-                    if ROLE_CONFIGS[r]["camp"] == "innocent"
+                    if _role_allowed_in_camp(r, "innocent")
                     and r != "fool"
+                    and r != target_role
                 ]
+                wrong = random.choice(wrong_pool)
+                wrong_label = f"{role_name(wrong)}（イノセント）"
 
-            wrong = random.choice(wrong_pool)
-            choices = [target_role, wrong]
+            correct_label = f"{role_name(target_role)}（{camp_name(target_camp)}）"
+            choices = [correct_label, wrong_label]
             random.shuffle(choices)
 
-            result = " / ".join(role_name(r) for r in choices)
+            result = " / ".join(choices)
             actor["investigator_results"].append(
                 f"{target['name']} の役職候補: {result}"
             )
@@ -1223,7 +1243,7 @@ async def join_room(room_code: str, data: Dict[str, Any]):
         room.host_id = player_id
 
     return {
-        "ui_version": "v6-fixed",
+        "ui_version": "v8-fixed",
         "room_code": room.room_code,
         "player_id": player_id,
         "is_host": is_host
@@ -1252,6 +1272,11 @@ async def update_settings(room_code: str, req: SettingsRequest):
                 0,
                 int(req.role_distribution.get(role, 0))
             )
+
+    room.excluded_roles = {
+        role for role in (req.excluded_roles or [])
+        if role in ROLE_CONFIGS
+    }
 
     if req.faction_distribution is not None:
         for camp in ["innocent", "imposter", "neutral"]:

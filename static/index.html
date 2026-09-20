@@ -192,36 +192,138 @@
 
                 <section style="border:2px solid #6c757d;border-radius:10px;padding:16px;background:#fff;">
                     <h3 style="margin:0 0 6px;">② 個別役職人数</h3>
-                    <p style="margin:0 0 14px;color:#555;font-size:0.9em;">0人の役職は、陣営の余った枠を埋める際にランダム候補になります。1人以上を指定した役職は、その人数を優先して配置します。</p>
+                    <p style="margin:0 0 14px;color:#555;font-size:0.9em;">「ランダム」は陣営の余った枠から候補になります。「0人（入れない）」は、その役職をゲームに絶対に入れません。</p>
 
                     <h4 style="margin:12px 0 8px;color:#0056b3;">イノセント系</h4>
                     <div class="role-grid">
-                        <label>バカ <input type="number" class="role-input" data-role="fool" value="0" min="0"></label>
-                        <label>ドクター <input type="number" class="role-input" data-role="doctor" value="0" min="0"></label>
-                        <label>ねずみ <input type="number" class="role-input" data-role="mouse" value="0" min="0"></label>
-                        <label>ポリス <input type="number" class="role-input" data-role="police" value="0" min="0"></label>
-                        <label>トラッパー <input type="number" class="role-input" data-role="trapper" value="0" min="0"></label>
-                        <label>ルックアウト <input type="number" class="role-input" data-role="lookout" value="0" min="0"></label>
-                        <label>インベスティゲーター <input type="number" class="role-input" data-role="investigator" value="0" min="0"></label>
-                        <label>挑発者 <input type="number" class="role-input" data-role="provoker" value="0" min="0"></label>
-                        <label>トラッカー <input type="number" class="role-input" data-role="tracker" value="0" min="0"></label>
+                        <label>バカ
+                            <select class="role-input" data-role="fool">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>ドクター
+                            <select class="role-input" data-role="doctor">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>ねずみ
+                            <select class="role-input" data-role="mouse">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>ポリス
+                            <select class="role-input" data-role="police">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>トラッパー
+                            <select class="role-input" data-role="trapper">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>ルックアウト
+                            <select class="role-input" data-role="lookout">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>インベスティゲーター
+                            <select class="role-input" data-role="investigator">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>挑発者
+                            <select class="role-input" data-role="provoker">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>トラッカー
+                            <select class="role-input" data-role="tracker">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
                     </div>
 
                     <h4 style="margin:18px 0 8px;color:#b02a37;">インポスター陣営の専用役職</h4>
                     <div class="role-grid">
-                        <label>ブレイマー <input type="number" class="role-input" data-role="blaimer" value="0" min="0"></label>
-                        <label>クリーナー <input type="number" class="role-input" data-role="cleaner" value="0" min="0"></label>
+                        <label>ブレイマー
+                            <select class="role-input" data-role="blaimer">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>クリーナー
+                            <select class="role-input" data-role="cleaner">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
                     </div>
                     <p style="margin:8px 0 0;color:#777;font-size:0.85em;">※インポスターは独立した役職ではありません。ねずみ／ポリス／トラッパー／ルックアウト／インベスティゲーター／挑発者／トラッカーがインポスター陣営になることがあります。ドクターとバカはインポスター対象外です。</p>
 
                     <h4 style="margin:18px 0 8px;color:#495057;">ニュートラル</h4>
                     <div class="role-grid">
-                        <label>シリアルキラー <input type="number" class="role-input" data-role="serial_killer" value="0" min="0"></label>
-                        <label>ボマー <input type="number" class="role-input" data-role="bomber" value="0" min="0"></label>
-                        <label>サバイバー <input type="number" class="role-input" data-role="survivor" value="0" min="0"></label>
-                        <label>シーフ <input type="number" class="role-input" data-role="thief" value="0" min="0"></label>
-                        <label>ゴースト <input type="number" class="role-input" data-role="ghost" value="0" min="0"></label>
-                        <label>魔術師 <input type="number" class="role-input" data-role="magician" value="0" min="0"></label>
+                        <label>シリアルキラー
+                            <select class="role-input" data-role="serial_killer">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>ボマー
+                            <select class="role-input" data-role="bomber">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>サバイバー
+                            <select class="role-input" data-role="survivor">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>シーフ
+                            <select class="role-input" data-role="thief">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>ゴースト
+                            <select class="role-input" data-role="ghost">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
+                        <label>魔術師
+                            <select class="role-input" data-role="magician">
+                                <option value="0">ランダム</option>
+                                <option value="none">0人（入れない）</option>
+                                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
+                        </label>
                     </div>
                 </section>
             </div>
@@ -343,7 +445,7 @@
 
 </div>
 
-<script src="/static/js/api.js?v=20260920-fix2"></script>
-<script src="/static/js/app.js?v=20260920-fix2"></script>
+<script src="/static/js/api.js?v=20260920-fix3"></script>
+<script src="/static/js/app.js?v=20260920-fix3"></script>
 </body>
 </html>

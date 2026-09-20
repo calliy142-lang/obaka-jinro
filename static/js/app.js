@@ -78,8 +78,15 @@ function leaveRoom() {
 
 async function handleStartGame() {
     const roleDistribution = {};
+    const excludedRoles = [];
     document.querySelectorAll(".role-input").forEach(input => {
-        roleDistribution[input.dataset.role] = parseInt(input.value) || 0;
+        const value = input.value;
+        if (value === "none") {
+            roleDistribution[input.dataset.role] = 0;
+            excludedRoles.push(input.dataset.role);
+        } else {
+            roleDistribution[input.dataset.role] = parseInt(value) || 0;
+        }
     });
 
     const settingsPayload = {
@@ -87,6 +94,7 @@ async function handleStartGame() {
         day_timer: document.getElementById("dayTimerInput").value,
         distribution_mode: "combined",
         role_distribution: roleDistribution,
+        excluded_roles: excludedRoles,
         faction_distribution: {
             innocent: parseInt(document.getElementById("factionInnocent").value) || 0,
             imposter: parseInt(document.getElementById("factionImposter").value) || 0,
