@@ -123,3 +123,19 @@ const API = {
         return await res.json();
     }
 };
+
+API.leaveRoom = async function(roomCode, playerId) {
+    const res = await fetch(`/api/room/${roomCode}/leave`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({player_id:playerId})});
+    if (!res.ok) { const d=await res.json().catch(()=>({})); throw new Error(d.detail || '退出に失敗しました'); }
+    return await res.json();
+};
+API.kickPlayer = async function(roomCode, hostId, targetId) {
+    const res = await fetch(`/api/room/${roomCode}/kick`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({player_id:hostId,target_player_id:targetId})});
+    if (!res.ok) { const d=await res.json().catch(()=>({})); throw new Error(d.detail || 'キックに失敗しました'); }
+    return await res.json();
+};
+API.forceFinish = async function(roomCode, hostId) {
+    const res = await fetch(`/api/room/${roomCode}/force-finish`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({host_player_id:hostId})});
+    if (!res.ok) { const d=await res.json().catch(()=>({})); throw new Error(d.detail || '強制終了に失敗しました'); }
+    return await res.json();
+};

@@ -67,7 +67,8 @@ function showGameScreen() {
     document.getElementById("displayRoomCode").innerText = currentRoomCode;
 }
 
-function leaveRoom() {
+async function leaveRoom() {
+    try { if (currentRoomCode && currentPlayerId) await API.leaveRoom(currentRoomCode, currentPlayerId); } catch (_) {}
     if (dayTimerInterval) { clearInterval(dayTimerInterval); dayTimerInterval = null; }
     lastRenderedPhase = null;
     if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
@@ -76,11 +77,9 @@ function leaveRoom() {
     document.getElementById("gamePanel").style.display = "none";
     document.getElementById("lobbyPanel").style.display = "block";
     document.getElementById("resultBox").style.display = "none";
-    const resultActions = document.getElementById("resultActions");
-    if (resultActions) resultActions.style.display = "none";
-    const guide = document.getElementById("roleGuidePanel");
-    if (guide) guide.style.display = "none";
+    const resultActions = document.getElementById("resultActions"); if (resultActions) resultActions.style.display = "none";
 }
+
 
 async function handleStartGame() {
     const roleDistribution = {};
@@ -156,7 +155,10 @@ function buildRoleActionUI(info) {
     } else if (info.targets.some(t => t.id === selectedNightTarget)) {
         targetSelect.value = selectedNightTarget;
     }
-    targetSelect.onchange = () => { selectedNightTarget = targetSelect.value; };
+    targetSelect.onchange = () => {
+        selectedNightTarget = targetSelect.value;
+        if (info.is_imposter && selectedNightTarget !== "pass" && attackSelect) { selectedAttackTarget = "pass"; attackSelect.value = "pass"; }
+    };
 
     // インポスター陣営は役職能力とは別に必ず襲撃欄を持つ。
     if (attackArea && attackSelect) {
@@ -185,7 +187,10 @@ function buildRoleActionUI(info) {
             } else if (info.attack_targets.some(t => t.id === selectedAttackTarget)) {
                 attackSelect.value = selectedAttackTarget;
             }
-            attackSelect.onchange = () => { selectedAttackTarget = attackSelect.value; };
+            attackSelect.onchange = () => {
+                selectedAttackTarget = attackSelect.value;
+                if (selectedAttackTarget !== "pass") { selectedNightTarget = "pass"; targetSelect.value = "pass"; }
+            };
         } else {
             attackArea.style.display = "none";
         }
@@ -208,6 +213,12 @@ function buildRoleActionUI(info) {
             const plant=document.createElement("option"); plant.value="plant"; plant.innerText="爆弾を仕掛ける";
             const detonate=document.createElement("option"); detonate.value="detonate"; detonate.innerText="爆弾を起爆する";
             select.appendChild(plant); select.appendChild(detonate); extraArea.appendChild(select);
+            const syncBomb = () => {
+                const detonating = select.value === "detonate";
+                targetSelect.disabled = detonating;
+                if (detonating) { selectedNightTarget = "pass"; targetSelect.value = "pass"; actionHelp.innerText = "設置済みの爆弾をすべて同時に起爆します。起爆対象を選ぶ必要はありません。"; }
+            };
+            select.onchange = syncBomb; syncBomb();
         }
         const helps={
             "シーフ":"選択したプレイヤーを殺害し、その役職を盗みます。","ねずみ":"1回だけ使用できます。調査結果は次の昼に全員へ公表されます。",
@@ -232,7 +243,7 @@ async function handleActionSubmit() {
     const guessSelect = document.getElementById("roleGuessSelect");
     if (guessSelect) action.guessed_role = guessSelect.value;
     const bombMode = document.getElementById("bombModeSelect");
-    if (bombMode) action.bomb_action = bombMode.value;
+    if (bombMode) { action.bomb_action = bombMode.value; if (bombMode.value === "detonate") action.target_id = "pass"; }
     try {
         const result = await API.sendAction(currentRoomCode, currentPlayerId, action);
         selectedNightTarget = action.target_id || "pass";
@@ -269,6 +280,13 @@ function renderVoteArea(info) {
     if (info.phase !== "DAY" || !info.alive) {
         voteArea.style.display = "none";
         if (votedText && info.phase !== "DAY") votedText.style.display = "none";
+        return;
+    }
+    const provokedNotice = document.getElementById("provokedNotice");
+    if (provokedNotice) { provokedNotice.style.display = info.provoked_bonus > 0 ? "block" : "none"; provokedNotice.innerText = info.provoked_bonus > 0 ? `挑発者の能力により、あなたには最初から${info.provoked_bonus}票入っています。` : ""; }
+    if (info.can_vote === false) {
+        voteArea.style.display = "none";
+        if (votedText) { votedText.style.display = "block"; votedText.innerText = "挑発者の能力を使用したため、この昼は投票できません。"; }
         return;
     }
     if (info.vote_submitted) {
@@ -329,7 +347,9 @@ function renderParticipants(info) {
         status.style.fontSize = "0.9em";
 
         row.appendChild(name);
-        row.appendChild(status);
+        const right = document.createElement("div"); right.style.cssText="display:flex;gap:8px;align-items:center;flex-shrink:0;"; right.appendChild(status);
+        if (info.is_host && !p.is_host) { const k=document.createElement("button"); k.innerText="キック"; k.style.cssText="padding:3px 7px;background:#dc3545;color:white;border:0;border-radius:4px;"; k.onclick=()=>handleKick(p.id,p.name); right.appendChild(k); }
+        row.appendChild(right);
         list.appendChild(row);
     });
 }
@@ -374,7 +394,7 @@ function renderResultActions(info) {
     const panel = document.getElementById("resultActions"); if (!panel) return;
     if (info.phase !== "RESULT") { panel.style.display = "none"; return; }
     panel.style.display = "block";
-    const names = { innocent:"イノセント", imposter:"インポスター", neutral:"ニュートラル", serial_killer:"シリアルキラー", bomber:"ボマー", survivor:"サバイバー", ghost:"ゴースト", draw:"引き分け" };
+    const names = { innocent:"イノセント", imposter:"インポスター", neutral:"ニュートラル", serial_killer:"シリアルキラー", bomber:"ボマー", survivor:"サバイバー", ghost:"ゴースト", thief:"シーフ", magician:"魔術師", draw:"引き分け" };
     let winner = names[info.winner_faction] || info.winner_faction || "結果";
     const winnerText = document.getElementById("resultWinnerText"); if (winnerText) winnerText.innerText = `勝利: ${winner}`;
     const voteBox = document.getElementById("resultVoteText");
@@ -427,6 +447,21 @@ async function handleRematch() {
     }
 }
 
+async function handleKick(id, name) {
+    if (!confirm(`${name} をキックしますか？`)) return;
+    try { await API.kickPlayer(currentRoomCode,currentPlayerId,id); await updateGameState(); } catch(e){ alert(e.message); }
+}
+async function handleForceFinish() {
+    if (!confirm("現在のゲームを強制終了して、同じルームの設定画面へ戻しますか？")) return;
+    try { await API.forceFinish(currentRoomCode,currentPlayerId); await updateGameState(); } catch(e){ alert(e.message); }
+}
+function renderSystemMessages(info) {
+    const box=document.getElementById("systemMessages"); if(!box) return;
+    const msgs=info.system_messages||[]; box.innerHTML="";
+    msgs.slice(-12).forEach(m=>{const d=document.createElement("div");d.innerText=m;box.appendChild(d);});
+    box.style.display=msgs.length?"block":"none";
+}
+
 function startPolling() {
     if (pollInterval) clearInterval(pollInterval);
     pollInterval = setInterval(updateGameState, 2000); updateGameState();
@@ -444,10 +479,14 @@ async function updateGameState() {
         roleName.dataset.role = info.displayed_role;
         document.getElementById("statusText").innerText = info.alive ? "状態: 生存" : "状態: 死亡";
         renderParticipants(info);
+        renderSystemMessages(info);
+        const submitted = document.getElementById("submittedText");
+        if (submitted && info.phase !== "NIGHT") submitted.style.display = "none";
         const resultBox = document.getElementById("resultBox");
         if (info.message) { resultBox.innerText = info.message; resultBox.style.display = "block"; }
         renderPrivateReports(info);
         document.getElementById("hostControls").style.display = info.is_host && info.phase === "SETUP" ? "block" : "none";
+        const ff=document.getElementById("forceFinishTop"); if(ff) ff.style.display = info.is_host && !["SETUP","RESULT"].includes(info.phase) ? "inline-block" : "none";
         const nightEndArea = document.getElementById("nightEndArea");
         if (nightEndArea) {
             // ホストの「夜を終了する」は、自分のアクション提出状態とは独立して表示する。

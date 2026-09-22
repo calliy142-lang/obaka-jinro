@@ -97,3 +97,15 @@ select {
         grid-column: 1 / -1;
     }
 }
+
+/* v12: role setting labels stay compact instead of awkward wrapping */
+.role-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important; gap: 10px !important; }
+.role-grid label { display:grid !important; grid-template-columns:minmax(0,1fr) 118px; align-items:center; gap:8px; white-space:nowrap; }
+.role-grid label > select { width:118px !important; }
+#participantsList > div > span:first-child { min-width:0; overflow-wrap:anywhere; }
+#systemMessages > div { padding:3px 0; border-bottom:1px solid #eee; }
+@media (max-width:520px) {
+  .role-grid { grid-template-columns:1fr !important; }
+  .role-grid label { grid-template-columns:minmax(0,1fr) 112px; font-size:.92em; }
+  .role-grid label > select { width:112px !important; }
+}

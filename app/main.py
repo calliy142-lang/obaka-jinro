@@ -109,6 +109,7 @@ class Room:
         self.ghost_revenge_owner = None
 
         self.next_day_messages = []
+        self.system_messages = []
 
 
 class SettingsRequest(BaseModel):
@@ -217,6 +218,7 @@ def create_player(name, player_id, is_host=False):
         "stolen_role": None,
         "alive": True,
         "is_host": is_host,
+        "connected": True,
 
         "ability_uses_remaining": {},
         "last_target": None,
@@ -240,6 +242,7 @@ def create_player(name, player_id, is_host=False):
 
         "provoked_bonus": 0,
         "provoked_target_id": None,
+        "skip_vote_next_day": False,
 
         "visited_last_night": None,
         "visited_by": [],
@@ -550,7 +553,7 @@ def flush_public_deaths(room):
 
 
 def try_survivor_revive(player):
-    if player["role"] != "survivor":
+    if get_effective_role(player) != "survivor":
         return False
 
     if player["survivor_revives"] <= 0:
@@ -584,11 +587,18 @@ def _resolve_attack_batch(room, attacks, doctor_targets=None, allow_survivor=Tru
         if not target or not target["alive"]:
             continue
 
+        # 魔術師は夜襲撃無効。ただし自分の予想失敗とゴースト復讐は死亡する。
+        if get_effective_role(target) == "magician":
+            target_attacks = [a for a in target_attacks if a.get("cause") in {"ghost_revenge", "magician_wrong_guess"}]
+            if not target_attacks:
+                continue
+
         # 同順位に「救える攻撃」しかなく、ドクターが対象を守っていれば蘇生可能。
         has_unsavable = any(not a.get("doctor_savable", False) for a in target_attacks)
         doctor_can_revive = target_id in doctor_targets and not has_unsavable
 
-        if target.get("role") == "survivor" and allow_survivor and not doctor_can_revive:
+        # ゴースト以外の夜襲撃なら、シーフが盗んだサバイバー能力も含めて最大3回復活できる。
+        if get_effective_role(target) == "survivor" and allow_survivor and not doctor_can_revive and not any(a["cause"] == "ghost_revenge" for a in target_attacks):
             pending_survivor_revives.append((target, target_attacks[0]["cause"]))
             continue
 
@@ -758,7 +768,7 @@ def resolve_night(room):
         if role == "bomber":
             bomb_action = action.get("bomb_action", "plant")
             if bomb_action == "detonate":
-                bomb_detonations.update(actor.get("bomb_targets", []))
+                bomb_detonations.update(tid for tid in actor.get("bomb_targets", []) if tid != actor["id"])
                 actor["bomb_targets"] = []
                 actor["bomb_planted"] = False
             else:
@@ -790,7 +800,7 @@ def resolve_night(room):
     # 5. 挑発者、サバイバー、ゴーストの蝋燭設置
     # ============================================================
     for target, cause in pending_survivors:
-        if not target["alive"] and target["role"] == "survivor":
+        if not target["alive"] and get_effective_role(target) == "survivor":
             if try_survivor_revive(target):
                 add_public_report(room, f"{target['name']} はサバイバーの能力で生き残りました。")
                 death_causes.pop(target["id"], None)
@@ -808,6 +818,8 @@ def resolve_night(room):
         if role == "provoker":
             target["provoked_bonus"] = 2
             target["provoked_target_id"] = actor["id"]
+            actor["skip_vote_next_day"] = True
+            add_public_report(room, f"{target['name']} に挑発者の能力で2票が追加されました。")
             if actor["role"] != "fool":
                 consume_use(actor, "provoker")
         elif role == "ghost":
@@ -918,10 +930,14 @@ def resolve_night(room):
             continue
         target = room.players.get(action.get("target_id"))
         if target and not target["alive"] and target["id"] in death_causes:
-            thief["stolen_role"] = target["role"]
-            thief["camp"] = get_camp(target)
-            if target["role"] == "bomber":
+            stolen_role = get_effective_role(target)
+            stolen_camp = get_camp(target)
+            thief["stolen_role"] = stolen_role
+            thief["camp"] = stolen_camp
+            if stolen_role == "bomber":
                 thief["bomb_targets"] = list(target.get("bomb_targets", []))
+            if stolen_role == "survivor":
+                thief["survivor_revives"] = target.get("survivor_revives", 3)
             add_public_report(room, f"{thief['name']} が役職を奪いました。")
 
     for pid, action in actions.items():
@@ -943,6 +959,7 @@ def resolve_night(room):
     room.actions = {}
     room.phase = "DAY"
     room.day_started_at = time.time()
+    room.system_messages.append(f"{room.day_count}日目の昼になりました。")
     room.next_day_messages = list(room.pending_public_reports)
     room.pending_public_reports.clear()
     room.message = "\n".join(room.next_day_messages)
@@ -998,6 +1015,18 @@ def check_win_condition(room):
         room.winners = [p["name"] for p in bombers]
         _set_result_message(room, "ボマーの勝利！")
         return True
+
+    # ニュートラル系が最後の1人になった場合は、その役職の勝利として即終了。
+    if len(alive) == 1:
+        sole = alive[0]
+        sole_role = get_effective_role(sole)
+        solo_names = {"ghost": "ゴースト", "thief": "シーフ", "magician": "魔術師"}
+        if sole_role in solo_names:
+            room.phase = "RESULT"
+            room.winner_faction = sole_role
+            room.winners = [sole["name"]]
+            _set_result_message(room, f"{solo_names[sole_role]}の勝利！")
+            return True
 
     # サバイバーは「ゲーム終了時に生存している」ことが勝利条件。
     # 夜の処理で他プレイヤーが全員死亡した場合も、ここで即時に決着させる。
@@ -1071,6 +1100,7 @@ def reset_room_for_rematch(room):
         player["mouse_results"] = []
         player["provoked_bonus"] = 0
         player["provoked_target_id"] = None
+        player["skip_vote_next_day"] = False
         player["visited_last_night"] = None
         player["visited_by"] = []
         player["alive_at_start_of_game"] = True
@@ -1114,7 +1144,11 @@ async def join_room(room_code: str, data: Dict[str, Any]):
     if not name:
         raise HTTPException(status_code=400, detail="プレイヤー名を入力してください")
 
-    if any(p["name"] == name for p in room.players.values()):
+    existing = next((p for p in room.players.values() if p["name"] == name), None)
+    if existing:
+        if not existing.get("connected", True):
+            existing["connected"] = True
+            return {"ui_version": "v12-fixed", "room_code": room.room_code, "player_id": existing["id"], "is_host": existing["is_host"], "rejoined": True}
         raise HTTPException(status_code=400, detail="同じ名前のプレイヤーがいます")
 
     player_id = uuid.uuid4().hex
@@ -1133,11 +1167,64 @@ async def join_room(room_code: str, data: Dict[str, Any]):
         room.host_id = player_id
 
     return {
-        "ui_version": "v10-fixed",
+        "ui_version": "v12-fixed",
         "room_code": room.room_code,
         "player_id": player_id,
         "is_host": is_host
     }
+
+
+class PlayerControlRequest(BaseModel):
+    player_id: str
+    target_player_id: Optional[str] = None
+
+
+@app.post("/api/room/{room_code}/leave")
+async def leave_room_api(room_code: str, req: PlayerControlRequest):
+    room = rooms.get(room_code.upper())
+    if not room or req.player_id not in room.players:
+        raise HTTPException(status_code=404, detail="プレイヤーまたは部屋がありません")
+    player = room.players[req.player_id]
+    player["connected"] = False
+    room.system_messages.append(f"{player['name']} が部屋から退出しました。")
+    if room.phase == "SETUP":
+        was_host = player["id"] == room.host_id
+        del room.players[player["id"]]
+        if was_host:
+            room.host_id = next(iter(room.players), None)
+            if room.host_id:
+                room.players[room.host_id]["is_host"] = True
+    return {"ok": True}
+
+
+@app.post("/api/room/{room_code}/kick")
+async def kick_player(room_code: str, req: PlayerControlRequest):
+    room = rooms.get(room_code.upper())
+    if not room or room.host_id != req.player_id:
+        raise HTTPException(status_code=403, detail="ホストのみキックできます")
+    target = room.players.get(req.target_player_id or "")
+    if not target or target["id"] == room.host_id:
+        raise HTTPException(status_code=400, detail="対象をキックできません")
+    target["connected"] = False
+    if room.phase == "SETUP":
+        del room.players[target["id"]]
+    elif target["alive"]:
+        target["alive"] = False
+        room.pending_deaths.append({"id": target["id"], "cause": "kick"})
+        flush_public_deaths(room)
+        check_win_condition(room)
+    room.system_messages.append(f"{target['name']} がホストによってキックされました。")
+    return {"ok": True}
+
+
+@app.post("/api/room/{room_code}/force-finish")
+async def force_finish(room_code: str, req: StartRequest):
+    room = rooms.get(room_code.upper())
+    if not room or room.host_id != req.host_player_id:
+        raise HTTPException(status_code=403, detail="ホストのみ強制終了できます")
+    reset_room_for_rematch(room)
+    room.system_messages.append("ホストがゲームを強制終了しました。ルーム設定に戻りました。")
+    return {"ok": True, "phase": room.phase}
 
 
 @app.post("/api/room/{room_code}/settings")
@@ -1193,7 +1280,7 @@ async def start_game(room_code: str, req: StartRequest):
     if room.phase != "SETUP":
         raise HTTPException(status_code=400, detail="すでにゲーム中です")
 
-    if len(room.players) < 2:
+    if len([p for p in room.players.values() if p.get("connected", True)]) < 2:
         raise HTTPException(status_code=400, detail="2人以上必要です")
 
     # 陣営人数を最優先し、個別役職指定を次に反映する統合方式。
@@ -1280,6 +1367,7 @@ async def get_player_info(room_code: str, player_id: str):
     role = player["role"]
 
     return {
+        "ui_version": "v12-fixed",
         "room_code": room.room_code,
         "player_id": player_id,
         "name": player["name"],
@@ -1297,7 +1385,7 @@ async def get_player_info(room_code: str, player_id: str):
                 "alive": p["alive"],
                 "is_host": p["is_host"],
             }
-            for p in room.players.values()
+            for p in room.players.values() if p.get("connected", True)
         ],
 
         "alive": player["alive"],
@@ -1312,8 +1400,11 @@ async def get_player_info(room_code: str, player_id: str):
 
         "action_submitted": player_id in room.actions,
         "vote_submitted": player_id in room.votes,
+        "can_vote": not bool(player.get("skip_vote_next_day", False)),
+        "provoked_bonus": int(player.get("provoked_bonus", 0)),
 
         "message": room.message,
+        "system_messages": list(room.system_messages[-30:]),
 
         "private_reports": list(player.get("private_reports", [])),
 
@@ -1378,6 +1469,10 @@ async def send_action(room_code: str, req: ActionRequest):
     if get_camp(player) == "imposter" and not attack_is_pass:
         attack_target = validate_target(room, req.player_id, req.attack_target_id)
 
+    # インポスターは「役職能力」か「襲撃」のどちらか一方だけ。
+    if get_camp(player) == "imposter" and not attack_is_pass and not is_pass:
+        raise HTTPException(status_code=400, detail="インポスターは役職能力か襲撃のどちらか一方だけ選択できます")
+
     # Fool has no real ability.
     if player["role"] == "fool":
         # Fool can submit a fake-looking action, but it has no effect.
@@ -1441,6 +1536,8 @@ async def send_vote(room_code: str, req: VoteRequest):
 
     if req.player_id in room.votes:
         raise HTTPException(status_code=400, detail="すでに投票しています")
+    if player.get("skip_vote_next_day", False):
+        raise HTTPException(status_code=400, detail="挑発者の能力を使用したため、この昼は投票できません")
 
     if req.target_id != "pass":
         validate_target(
@@ -1452,7 +1549,8 @@ async def send_vote(room_code: str, req: VoteRequest):
 
     room.votes[req.player_id] = req.target_id
 
-    if len(room.votes) >= len(alive_players(room)):
+    eligible_voters = [p for p in alive_players(room) if not p.get("skip_vote_next_day", False)]
+    if len(room.votes) >= len(eligible_voters):
         resolve_voting(room)
 
     return {
@@ -1508,9 +1606,11 @@ def resolve_voting(room):
         for p in alive:
             p["provoked_bonus"] = 0
             p["provoked_target_id"] = None
+            p["skip_vote_next_day"] = False
 
         room.phase = "NIGHT"
         room.day_started_at = None
+        room.system_messages.append("夜になりました。夜のアクションを選択してください。")
         return
 
     max_votes = max(weighted_votes.values())
@@ -1527,12 +1627,14 @@ def resolve_voting(room):
         for p in alive:
             p["provoked_bonus"] = 0
             p["provoked_target_id"] = None
+            p["skip_vote_next_day"] = False
 
         if check_win_condition(room):
             return
 
         room.phase = "NIGHT"
         room.day_started_at = None
+        room.system_messages.append("夜になりました。夜のアクションを選択してください。")
         return
 
     expelled = room.players[leaders[0]]
@@ -1584,6 +1686,7 @@ def resolve_voting(room):
     for p in room.players.values():
         p["provoked_bonus"] = 0
         p["provoked_target_id"] = None
+        p["skip_vote_next_day"] = False
 
     death_reports = flush_public_deaths(room)
 
@@ -1595,6 +1698,7 @@ def resolve_voting(room):
 
     # If Ghost revenge was scheduled, go to night.
     room.phase = "NIGHT"
+    room.system_messages.append("夜になりました。夜のアクションを選択してください。")
 
     # If no alive players, finish.
     if not alive_players(room):
