@@ -121,6 +121,15 @@ const API = {
         }
 
         return await res.json();
+    },
+    async sendChat(roomCode, playerId, message) {
+        const res = await fetch(`/api/room/${roomCode}/chat`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({player_id: playerId, message})
+        });
+        if (!res.ok) { const d=await res.json().catch(()=>({})); throw new Error(d.detail || 'チャット送信に失敗しました'); }
+        return await res.json();
     }
 };
 

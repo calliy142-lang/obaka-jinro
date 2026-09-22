@@ -111,6 +111,7 @@ class Room:
 
         self.next_day_messages = []
         self.system_messages = []
+        self.chat_messages = {"alive": [], "dead": []}
 
 
 class SettingsRequest(BaseModel):
@@ -138,6 +139,11 @@ class ActionRequest(BaseModel):
 class VoteRequest(BaseModel):
     player_id: str
     target_id: str
+
+
+class ChatRequest(BaseModel):
+    player_id: str
+    message: str
 
 
 def role_name(role_id):
@@ -203,11 +209,26 @@ def is_attack_role(role):
 def public_role_for(room, target):
     if target.get("public_role_unknown"):
         return "不明"
-
     if target.get("cleaned"):
         return "不明"
-
+    if target.get("cleaned_by_blaimer"):
+        # ブレイマーは役職名そのものより「インポスター側に見える」偽装を優先。
+        return f"{role_name(target['role'])}（インポスター陣営に偽装）"
     return role_name(target["role"])
+
+
+def apparent_role_and_camp(target):
+    """ねずみ/インベスティゲーター等から見える役職・陣営。"""
+    if target.get("public_role_unknown") or target.get("cleaned") or target.get("cleaned_by_cleaner"):
+        return None, None
+    if target.get("cleaned_by_blaimer"):
+        role = target.get("role")
+        # 元役職がインポスター陣営で成立できるなら役職名は維持し、陣営だけ偽装。
+        if role in IMPOSTER_ELIGIBLE_INNOCENT_ROLES or role in {"blaimer", "cleaner"}:
+            return role, "imposter"
+        # 成立しない役職はブレイマーとして偽装して矛盾を避ける。
+        return "blaimer", "imposter"
+    return target.get("role"), get_camp(target)
 
 
 def display_role_for(player):
@@ -450,7 +471,7 @@ def choose_roles_combined(room):
         assigned["imposter"].extend([role] * (count - take_i))
 
     # 3) 残り枠は「個別指定0」の役職からランダム。
-    zero_roles = [r for r, n in role_counts.items() if n == 0]
+    zero_roles = [r for r, n in role_counts.items() if n == 0 and r not in excluded_roles]
     pools = {
         "innocent": [r for r in zero_roles if _role_allowed_in_camp(r, "innocent")],
         "imposter": [r for r in zero_roles if _role_allowed_in_camp(r, "imposter")],
@@ -827,9 +848,12 @@ def resolve_night(room):
     active_police = {pid for pid in active_police if pid not in trapped_actor_ids}
     blocked_by_police = {police_intents[pid] for pid in active_police}
     for pid in active_police:
+        actor = room.players.get(pid)
         target = room.players.get(police_intents[pid])
         if target:
             add_report(target, "ポリスによって今夜の能力を封じられました。")
+            if actor:
+                add_report(actor, f"{target['name']} の能力を封じました。")
 
     # 罠の命中はトラッパー本人だけに通知し、誰が掛かったかは伏せる。
     for trapper_id in active_trappers:
@@ -963,23 +987,23 @@ def resolve_night(room):
             add_public_report(room, "ねずみの能力が使用されました。")
             if actor["role"] != "fool":
                 consume_use(actor, "mouse")
-            actual_role = target["role"]
-            actual_camp = get_camp(target)
+            apparent_role, apparent_camp = apparent_role_and_camp(target)
             if actor["role"] == "fool":
                 fake_role = random.choice(list(ROLE_CONFIGS.keys()))
                 result = f"{target['name']} は {role_name(fake_role)} / {camp_name(ROLE_CONFIGS[fake_role]['camp'])}"
+            elif apparent_role is None:
+                result = f"{target['name']} は 不明 / 不明"
             else:
-                # 対象が同じ夜に死亡していても、ねずみは実際の役職/陣営を取得する。
-                result = f"{target['name']} は {role_name(actual_role)} / {camp_name(actual_camp)}"
+                # 死亡していても取得可能。ブレイマー/クリーナーの偽装はここに反映。
+                result = f"{target['name']} は {role_name(apparent_role)} / {camp_name(apparent_camp)}"
             actor["mouse_results"].append(result)
             add_report(actor, result)
         elif role == "investigator":
             if not target["alive"]:
                 add_report(actor, f"{target['name']} の役職候補: わからない")
                 continue
-            target_role = target["role"]
-            target_camp = get_camp(target)
-            if target.get("public_role_unknown") or target.get("cleaned") or target.get("cleaned_by_cleaner") or target.get("cleaned_by_blaimer"):
+            target_role, target_camp = apparent_role_and_camp(target)
+            if target_role is None:
                 add_report(actor, f"{target['name']} の役職候補: わからない")
                 continue
             if target_camp == "innocent":
@@ -1018,7 +1042,7 @@ def resolve_night(room):
             visitors = []
             for visitor in visitors_by_house.get(target["id"], []):
                 visitor_role = get_effective_role(visitor)
-                if visitor_role == "serial_killer" or visitor["id"] in trapped_actor_ids:
+                if visitor_role == "serial_killer" or visitor["id"] in trapped_actor_ids or visitor["id"] in blocked_by_police:
                     continue
                 visitors.append(visitor["name"])
             add_report(actor, f"{target['name']} の家を訪れたのは: {', '.join(visitors)}" if visitors else f"{target['name']} の家を訪れた人はいませんでした。")
@@ -1031,8 +1055,56 @@ def resolve_night(room):
                 visited = target.get("visited_last_night")
                 add_report(actor, f"{target['name']} は {room.players[visited]['name']} の家を訪れました。" if visited and visited in room.players else f"{target['name']} は今夜、家を出ませんでした。")
 
+    # バカは表示上割り当てられた能力に応じて、必ずそれらしいデタラメ結果を受け取る。
+    # 実際のゲーム状態は一切変更しない。
+    for pid, action in actions.items():
+        actor = room.players.get(pid)
+        if not actor or actor.get("role") != "fool":
+            continue
+        target = room.players.get(action.get("target_id"))
+        if not target or action.get("target_id") in (None, "", "pass"):
+            continue
+        fake = actor.get("displayed_role")
+        others = [p for p in room.players.values() if p["id"] not in {actor["id"], target["id"]}]
+        if fake == "mouse":
+            add_public_report(room, "ねずみの能力が使用されました。")
+            fr = random.choice(list(ROLE_CONFIGS.keys()))
+            add_report(actor, f"{target['name']} は {role_name(fr)} / {camp_name(ROLE_CONFIGS[fr]['camp'])}")
+        elif fake == "investigator":
+            roles = random.sample(list(ROLE_CONFIGS.keys()), k=2)
+            labels = [f"{role_name(r)}（{camp_name(ROLE_CONFIGS[r]['camp'])}）" for r in roles]
+            add_report(actor, f"{target['name']} の役職候補: {' / '.join(labels)}")
+        elif fake == "police":
+            add_report(actor, random.choice([
+                f"{target['name']} の能力を封じました。",
+                f"{target['name']} は今夜、家を出ませんでした。"
+            ]))
+        elif fake == "trapper":
+            add_report(actor, random.choice([
+                "今夜、仕掛けた罠に誰かが引っかかりました。",
+                "今夜、仕掛けた罠には誰も引っかかりませんでした。"
+            ]))
+        elif fake == "lookout":
+            if others and random.choice([True, False]):
+                v = random.choice(others)
+                add_report(actor, f"{target['name']} の家を訪れたのは: {v['name']}")
+            else:
+                add_report(actor, f"{target['name']} の家を訪れた人はいませんでした。")
+        elif fake == "tracker":
+            if others and random.choice([True, False]):
+                v = random.choice(others)
+                add_report(actor, f"{target['name']} は {v['name']} の家を訪れました。")
+            else:
+                add_report(actor, f"{target['name']} は今夜、家を出ませんでした。")
+        elif fake == "doctor":
+            add_report(target, "誰かがあなたを訪問しました。")
+            add_report(actor, random.choice([
+                f"{target['name']} を診察しました。",
+                f"{target['name']} を蘇生しました。"
+            ]))
+
     for player in room.players.values():
-        if not player["alive"] and (player.get("cleaned_by_cleaner") or player.get("cleaned_by_blaimer")):
+        if not player["alive"] and player.get("cleaned_by_cleaner"):
             player["cleaned"] = True
             player["public_role_unknown"] = True
 
@@ -1176,6 +1248,7 @@ def reset_room_for_rematch(room):
     room.pending_public_reports = []
     room.pending_deaths = []
     room.next_day_messages = []
+    room.chat_messages = {"alive": [], "dead": []}
 
     room.winner_faction = None
     room.winners = []
@@ -1258,7 +1331,7 @@ async def join_room(room_code: str, data: Dict[str, Any]):
     if existing:
         if not existing.get("connected", True):
             existing["connected"] = True
-            return {"ui_version": "v13-fixed", "room_code": room.room_code, "player_id": existing["id"], "is_host": existing["is_host"], "rejoined": True}
+            return {"ui_version": "v15-fixed", "room_code": room.room_code, "player_id": existing["id"], "is_host": existing["is_host"], "rejoined": True}
         raise HTTPException(status_code=400, detail="同じ名前のプレイヤーがいます")
 
     player_id = uuid.uuid4().hex
@@ -1277,7 +1350,7 @@ async def join_room(room_code: str, data: Dict[str, Any]):
         room.host_id = player_id
 
     return {
-        "ui_version": "v13-fixed",
+        "ui_version": "v15-fixed",
         "room_code": room.room_code,
         "player_id": player_id,
         "is_host": is_host
@@ -1335,6 +1408,33 @@ async def force_finish(room_code: str, req: StartRequest):
     reset_room_for_rematch(room)
     room.system_messages.append("ホストがゲームを強制終了しました。ルーム設定に戻りました。")
     return {"ok": True, "phase": room.phase}
+
+
+
+
+@app.post("/api/room/{room_code}/chat")
+async def send_chat(room_code: str, req: ChatRequest):
+    room = rooms.get(room_code.upper())
+    if not room:
+        raise HTTPException(status_code=404, detail="部屋がありません")
+    player = room.players.get(req.player_id)
+    if not player or not player.get("connected", True):
+        raise HTTPException(status_code=404, detail="プレイヤーが存在しません")
+    message = (req.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="メッセージを入力してください")
+    if len(message) > 300:
+        raise HTTPException(status_code=400, detail="チャットは300文字以内です")
+    channel = "alive" if player["alive"] else "dead"
+    room.chat_messages[channel].append({
+        "player_id": player["id"],
+        "name": player["name"],
+        "message": message,
+        "channel": channel,
+        "ts": int(time.time())
+    })
+    room.chat_messages[channel] = room.chat_messages[channel][-100:]
+    return {"ok": True}
 
 
 @app.post("/api/room/{room_code}/settings")
@@ -1478,7 +1578,7 @@ async def get_player_info(room_code: str, player_id: str):
     role = player["role"]
 
     return {
-        "ui_version": "v13-fixed",
+        "ui_version": "v15-fixed",
         "room_code": room.room_code,
         "player_id": player_id,
         "name": player["name"],
@@ -1516,6 +1616,9 @@ async def get_player_info(room_code: str, player_id: str):
 
         "message": room.message,
         "system_messages": list(room.system_messages[-30:]),
+
+        "chat_channel": "alive" if player["alive"] else "dead",
+        "chat_messages": list(room.chat_messages["alive" if player["alive"] else "dead"][-100:]),
 
         "private_reports": list(player.get("private_reports", [])),
 

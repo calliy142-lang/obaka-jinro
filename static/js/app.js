@@ -1,3 +1,41 @@
+
+function renderChat(info) {
+    const title = document.getElementById("chatTitle");
+    const box = document.getElementById("chatMessages");
+    if (!title || !box) return;
+    title.innerText = info.chat_channel === "dead" ? "死者チャット" : "生存者チャット";
+    const wasNearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    box.innerHTML = "";
+    (info.chat_messages || []).forEach(m => {
+        const row = document.createElement("div");
+        row.style.cssText = "padding:4px 2px;overflow-wrap:anywhere;";
+        const name = document.createElement("b");
+        name.innerText = `${m.name}: `;
+        const msg = document.createElement("span");
+        msg.innerText = m.message;
+        row.appendChild(name); row.appendChild(msg); box.appendChild(row);
+    });
+    if (wasNearBottom) box.scrollTop = box.scrollHeight;
+}
+
+async function handleSendChat() {
+    const input = document.getElementById("chatInput");
+    if (!input || !currentRoomCode || !currentPlayerId) return;
+    const message = input.value.trim();
+    if (!message) return;
+    try {
+        await API.sendChat(currentRoomCode, currentPlayerId, message);
+        input.value = "";
+        await updateGameState();
+    } catch (err) { alert(err.message); }
+}
+window.addEventListener("DOMContentLoaded", () => {
+    const input = document.getElementById("chatInput");
+    if (input) input.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); handleSendChat(); }
+    });
+});
+
 let currentRoomCode = null;
 let currentPlayerId = null;
 let pollInterval = null;
@@ -236,7 +274,7 @@ function buildRoleActionUI(info) {
             "ポリス":"対象の夜能力を封じます。同じ対象を2夜連続では選べません。","トラッパー":"対象の家に罠を仕掛け、そこを訪れた人のうち1人をランダムに封じます。",
             "ルックアウト":"対象の家を訪れたプレイヤーを確認します。","インベスティゲーター":"対象の役職候補を2つに絞り込みます。",
             "トラッカー":"対象が夜に訪れた家を確認します。","ゴースト":"対象の家にろうそくを置き、投票で追放された場合は次の夜に復讐します。",
-            "バカ":"あなたには別のイノセント役職に見えていますが、実際には能力を持ちません。","ブレイマー":"対象の死亡・追放時の役職表示をインポスターに見せます。残り2回まで使用できます。",
+            "バカ":"あなたには別のイノセント役職に見えていますが、実際には能力を持ちません。","ブレイマー":"対象をインポスター陣営に偽装します。死亡・追放時の公開だけでなく、ねずみ・インベスティゲーターの調査にも偽装が反映されます。残り2回まで使用できます。",
             "クリーナー":"対象が死亡・追放された際、その役職を不明にします。","シリアルキラー":"対象を殺害します。ポリスやトラッパーでは止まりません。",
             "サバイバー":"夜の行動はありません。殺害されても最大3回まで復活します。"
         };
@@ -499,6 +537,7 @@ async function updateGameState() {
         const resultBox = document.getElementById("resultBox");
         if (info.message) { resultBox.innerText = info.message; resultBox.style.display = "block"; }
         renderPrivateReports(info);
+        renderChat(info);
         document.getElementById("hostControls").style.display = info.is_host && info.phase === "SETUP" ? "block" : "none";
         const ff=document.getElementById("forceFinishTop"); if(ff) ff.style.display = info.is_host && !["SETUP","RESULT"].includes(info.phase) ? "inline-block" : "none";
         const nightEndArea = document.getElementById("nightEndArea");

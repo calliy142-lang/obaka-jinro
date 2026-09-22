@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>おバカ人狼</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260922-v13">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260923-v15">
     <style>
         body {
             background: #f5f5f5;
@@ -164,6 +164,17 @@
         </div>
 
         <div id="privateReportBox" class="private-report" style="display:none;"></div>
+
+        <div id="chatPanel" class="panel">
+            <h3 id="chatTitle" style="margin-top:0;">生存者チャット</h3>
+            <div id="chatMessages" style="height:180px;overflow-y:auto;border:1px solid #ddd;border-radius:6px;padding:8px;background:#fafafa;margin-bottom:8px;"></div>
+            <div style="display:flex;gap:8px;">
+                <input id="chatInput" type="text" maxlength="300" placeholder="メッセージを入力" style="flex:1;min-width:0;">
+                <button onclick="handleSendChat()" style="padding:7px 14px;">送信</button>
+            </div>
+            <div style="font-size:.82em;color:#666;margin-top:6px;">生存者と死者は別チャットです。</div>
+        </div>
+
 
         <!-- ホスト設定 -->
         <div id="hostControls" class="panel" style="display:none;border:2px solid #007bff;">
@@ -439,7 +450,7 @@
                 <li><b>インポスター</b>は独立した役職ではなく陣営。インポスター陣営のプレイヤーは、対象となるイノセント系役職を1つ持つ。</li>
                 <li><b>対象役職</b>：ねずみ / ポリス / トラッパー / ルックアウト / インベスティゲーター / 挑発者 / トラッカー。</li>
                 <li><b>対象外</b>：バカ / ドクター。</li>
-                <li><b>ブレイマー</b>：対象が死亡/追放された際、インポスター側の役職に見せる。2回使用。</li>
+                <li><b>ブレイマー</b>：対象をインポスター陣営に偽装する。死亡/追放時の公開だけでなく、ねずみ・インベスティゲーターの調査結果にも偽装が反映される。元の役職がインポスター陣営で成立できる場合は役職名を維持して陣営だけ偽装し、成立しない場合はブレイマーとして見える。2回使用。</li>
                 <li><b>クリーナー</b>：対象が死亡/追放された際、役職を不明にする。</li>
             </ul>
 
@@ -457,7 +468,7 @@
 
 </div>
 
-<script src="/static/js/api.js?v=20260922-v13"></script>
-<script src="/static/js/app.js?v=20260922-v13"></script>
+<script src="/static/js/api.js?v=20260923-v15"></script>
+<script src="/static/js/app.js?v=20260923-v15"></script>
 </body>
 </html>
