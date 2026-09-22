@@ -18,13 +18,19 @@ function switchMode(mode) {
 }
 
 function updateFactionTotal() {
-    const ids = ["factionInnocent", "factionImposter", "factionNeutral"];
-    const total = ids.reduce((sum, id) => sum + (parseInt(document.getElementById(id)?.value) || 0), 0);
+    const vals = ["factionInnocent", "factionImposter", "factionNeutral"].map(id => document.getElementById(id)?.value ?? "0");
+    const hasRandom = vals.includes("random");
+    const total = vals.reduce((sum, v) => sum + (v === "random" ? 0 : (parseInt(v) || 0)), 0);
     const playerCount = window.currentPlayerCount || null;
     const box = document.getElementById("factionTotalText");
     if (!box) return;
-    box.innerText = playerCount === null ? `設定合計: ${total}人` : `設定合計: ${total}人 / 参加人数: ${playerCount}人`;
-    box.style.color = playerCount !== null && total !== playerCount ? "#dc3545" : "#198754";
+    if (hasRandom) {
+        box.innerText = playerCount === null ? "ランダム陣営あり：開始時に人数を抽選" : `ランダム陣営あり：開始時に抽選 / 参加人数: ${playerCount}人`;
+        box.style.color = "#6c757d";
+    } else {
+        box.innerText = playerCount === null ? `設定合計: ${total}人` : `設定合計: ${total}人 / 参加人数: ${playerCount}人`;
+        box.style.color = playerCount !== null && total !== playerCount ? "#dc3545" : "#198754";
+    }
 }
 
 function toggleRoleGuide() {
@@ -102,9 +108,13 @@ async function handleStartGame() {
         excluded_roles: excludedRoles,
         faction_distribution: {
             innocent: parseInt(document.getElementById("factionInnocent").value) || 0,
-            imposter: parseInt(document.getElementById("factionImposter").value) || 0,
-            neutral: parseInt(document.getElementById("factionNeutral").value) || 0
-        }
+            imposter: document.getElementById("factionImposter").value === "random" ? 0 : (parseInt(document.getElementById("factionImposter").value) || 0),
+            neutral: document.getElementById("factionNeutral").value === "random" ? 0 : (parseInt(document.getElementById("factionNeutral").value) || 0)
+        },
+        faction_random: [
+            ...(document.getElementById("factionImposter").value === "random" ? ["imposter"] : []),
+            ...(document.getElementById("factionNeutral").value === "random" ? ["neutral"] : [])
+        ]
     };
 
     try {
@@ -221,7 +231,7 @@ function buildRoleActionUI(info) {
             select.onchange = syncBomb; syncBomb();
         }
         const helps={
-            "シーフ":"選択したプレイヤーを殺害し、その役職を盗みます。","ねずみ":"1回だけ使用できます。調査結果は次の昼に全員へ公表されます。",
+            "シーフ":"選択したプレイヤーを殺害し、その役職を盗みます。","ねずみ":"1回だけ使用できます。使用されたことだけ全体通知され、調査結果は自分だけに表示されます。",
             "挑発者":"対象の次の昼の票数を+2します。残り2回まで使用できます。","ドクター":"対象が夜に死亡した場合、蘇生できます。同じ対象を2夜連続では選べません。",
             "ポリス":"対象の夜能力を封じます。同じ対象を2夜連続では選べません。","トラッパー":"対象の家に罠を仕掛け、そこを訪れた人のうち1人をランダムに封じます。",
             "ルックアウト":"対象の家を訪れたプレイヤーを確認します。","インベスティゲーター":"対象の役職候補を2つに絞り込みます。",
@@ -266,6 +276,10 @@ function renderPrivateReports(info) {
         box.style.display = "none"; box.innerText = ""; return;
     }
     box.innerHTML = "";
+    const title = document.createElement("div");
+    title.innerText = "個人履歴（自分だけに表示）";
+    title.style.cssText = "font-weight:bold;margin-bottom:8px;";
+    box.appendChild(title);
     info.private_reports.forEach(report => {
         const div = document.createElement("div"); div.innerText = report; div.style.marginBottom = "6px"; box.appendChild(div);
     });

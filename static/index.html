@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>おバカ人狼</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260922-v13">
     <style>
         body {
             background: #f5f5f5;
@@ -179,16 +179,22 @@
             <div style="margin-top:10px;display:grid;gap:16px;">
                 <section style="border:2px solid #007bff;border-radius:10px;padding:16px;background:#f7fbff;">
                     <h3 style="margin:0 0 6px;color:#0056b3;">① 陣営人数（最優先）</h3>
-                    <p style="margin:0 0 12px;color:#555;font-size:0.9em;">合計を参加人数に合わせてください。まずこの人数枠を確定し、その中に個別役職を割り当てます。</p>
+                    <p style="margin:0 0 12px;color:#555;font-size:0.9em;">インポスター／ニュートラルは「ランダム」も選べます。イノセント人数を先に確保し、参加人数との差分をインポスター／ニュートラルへ配分します。</p>
                     <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
                         <label style="background:white;border:1px solid #cfe2ff;border-radius:8px;padding:12px;font-weight:bold;">イノセント<br>
                             <input type="number" id="factionInnocent" value="2" min="0" class="faction-input">
                         </label>
                         <label style="background:white;border:1px solid #f5c2c7;border-radius:8px;padding:12px;font-weight:bold;color:#b02a37;">インポスター<br>
-                            <input type="number" id="factionImposter" value="1" min="0" class="faction-input">
+                            <select id="factionImposter" class="faction-input">
+                                <option value="random">ランダム</option>
+                                <option value="0">0人</option><option value="1" selected>1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
                         </label>
                         <label style="background:white;border:1px solid #ced4da;border-radius:8px;padding:12px;font-weight:bold;color:#495057;">ニュートラル<br>
-                            <input type="number" id="factionNeutral" value="0" min="0" class="faction-input">
+                            <select id="factionNeutral" class="faction-input">
+                                <option value="random">ランダム</option>
+                                <option value="0" selected>0人</option><option value="1">1人</option><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option><option value="6">6人</option><option value="7">7人</option><option value="8">8人</option><option value="9">9人</option><option value="10">10人</option>
+                            </select>
                         </label>
                     </div>
                     <div id="factionTotalText" style="margin-top:10px;font-weight:bold;"></div>
@@ -419,7 +425,7 @@
             <ul>
                 <li><b>バカ</b>：イノセント役職を与えられたように見えるが、実際には能力を持たない。</li>
                 <li><b>ドクター</b>：選択したプレイヤーが死亡した場合に蘇生。2夜連続で同じ家は訪問不可。</li>
-                <li><b>ねずみ</b>：選択したプレイヤーの真の役職・陣営を1回だけ知る。次の昼に全員へ公表。</li>
+                <li><b>ねずみ</b>：選択したプレイヤーの真の役職・陣営を1回だけ知る。使用されたことだけ全体通知され、調査結果は本人だけが確認できます。</li>
                 <li><b>ポリス</b>：対象の能力使用を封じる。2夜連続で同じ対象は不可。</li>
                 <li><b>トラッパー</b>：対象の家に罠を仕掛け、訪問者のうち1人をランダムに封じる。</li>
                 <li><b>ルックアウト</b>：対象の家を訪問した人を知る。</li>
@@ -451,7 +457,7 @@
 
 </div>
 
-<script src="/static/js/api.js?v=20260920-fix4"></script>
-<script src="/static/js/app.js?v=20260920-fix4"></script>
+<script src="/static/js/api.js?v=20260922-v13"></script>
+<script src="/static/js/app.js?v=20260922-v13"></script>
 </body>
 </html>

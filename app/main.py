@@ -89,6 +89,7 @@ class Room:
         self.role_distribution["police"] = 1
         self.role_distribution["investigator"] = 1
         self.faction_distribution = {"innocent": 2, "imposter": 1, "neutral": 0}
+        self.faction_random = {"imposter": False, "neutral": False}
 
         self.actions = {}
         self.votes = {}
@@ -119,6 +120,7 @@ class SettingsRequest(BaseModel):
     role_distribution: Optional[Dict[str, int]] = None
     faction_distribution: Optional[Dict[str, int]] = None
     excluded_roles: Optional[List[str]] = None
+    faction_random: Optional[List[str]] = None
 
 
 class StartRequest(BaseModel):
@@ -143,6 +145,16 @@ def role_name(role_id):
 
 
 def add_report(player, text):
+    """個人通知を保存。同じ夜に同じ文面が複数回来ても1件だけ表示する。"""
+    player.setdefault("private_reports", [])
+    player.setdefault("_night_report_texts", [])
+    if text in player["_night_report_texts"]:
+        return
+    player["_night_report_texts"].append(text)
+    player["private_reports"].append(text)
+
+
+def add_action_history(player, text):
     player.setdefault("private_reports", [])
     player["private_reports"].append(text)
 
@@ -235,6 +247,7 @@ def create_player(name, player_id, is_host=False):
         "public_role_unknown": False,
 
         "private_reports": [],
+        "_night_report_texts": [],
         "day_announcements": [],
 
         "investigator_results": [],
@@ -280,6 +293,58 @@ def _role_allowed_in_camp(role, camp):
         return _role_is_impostor_eligible(role) or base_camp == "imposter"
     # innocent
     return base_camp == "innocent"
+
+
+def _resolve_random_faction_distribution(room):
+    """ランダム陣営は、設定したイノセント人数を先に確保し、その不足分だけを配分する。
+
+    例: 8人・イノセント4人・I/N両方ランダムなら、残り4枠をI/Nへランダム配分する。
+    片方だけランダムなら、もう片方の固定人数を引いた不足分がランダム側に入る。
+    個別役職設定と両立しない配分は候補から除外する。
+    """
+    total = len(room.players)
+    random_camps = {c for c, enabled in room.faction_random.items() if enabled}
+    if not random_camps:
+        return
+
+    innocent = max(0, int(room.faction_distribution.get("innocent", 0)))
+    fixed_i = None if "imposter" in random_camps else max(0, int(room.faction_distribution.get("imposter", 0)))
+    fixed_n = None if "neutral" in random_camps else max(0, int(room.faction_distribution.get("neutral", 0)))
+    shortage = total - innocent
+    if shortage < 0:
+        raise HTTPException(status_code=400, detail="イノセント人数が参加人数を超えています。")
+
+    choices = []
+    if fixed_i is None and fixed_n is None:
+        # 不足分をインポスター/ニュートラルへ分配する。
+        for imposter in range(shortage + 1):
+            neutral = shortage - imposter
+            choices.append((innocent, imposter, neutral))
+    elif fixed_i is None:
+        if fixed_n <= shortage:
+            choices.append((innocent, shortage - fixed_n, fixed_n))
+    elif fixed_n is None:
+        if fixed_i <= shortage:
+            choices.append((innocent, fixed_i, shortage - fixed_i))
+
+    if not choices:
+        raise HTTPException(status_code=400, detail="イノセント人数の不足分からランダム陣営人数を決定できません。")
+
+    original = dict(room.faction_distribution)
+    valid_choices = []
+    for i_count, imposter, neutral in choices:
+        room.faction_distribution = {"innocent": i_count, "imposter": imposter, "neutral": neutral}
+        try:
+            _validate_distribution(room)
+            valid_choices.append((i_count, imposter, neutral))
+        except HTTPException:
+            pass
+    if not valid_choices:
+        room.faction_distribution = original
+        raise HTTPException(status_code=400, detail="個別役職設定と両立するランダム陣営人数がありません。")
+
+    i_count, imposter, neutral = random.choice(valid_choices)
+    room.faction_distribution = {"innocent": i_count, "imposter": imposter, "neutral": neutral}
 
 
 def _validate_distribution(room):
@@ -338,6 +403,7 @@ def _validate_distribution(room):
 
 def choose_roles_combined(room):
     """陣営人数を最優先し、個別役職指定を次に反映、残りを0指定役職からランダム補充する。"""
+    _resolve_random_faction_distribution(room)
     _validate_distribution(room)
 
     players = list(room.players.values())
@@ -571,7 +637,7 @@ def _resolve_attack_batch(room, attacks, doctor_targets=None, allow_survivor=Tru
     「ドクターで救える攻撃」に対して、いったん死亡した後に蘇生できる。
     ボマーなど doctor_savable=False の攻撃が同時に入っている場合は救えない。
     """
-    doctor_targets = doctor_targets or set()
+    doctor_targets = doctor_targets or {}
     pending_survivor_revives = []
     death_causes = {}
 
@@ -608,7 +674,10 @@ def _resolve_attack_batch(room, attacks, doctor_targets=None, allow_survivor=Tru
 
         if doctor_can_revive:
             revive_player(room, target)
-            add_public_report(room, f"{target['name']} はドクターによって救われました。")
+            for doctor_id in doctor_targets.get(target_id, []):
+                doctor = room.players.get(doctor_id)
+                if doctor:
+                    add_report(doctor, f"{target['name']} を蘇生しました。")
             death_causes.pop(target_id, None)
 
         if any(a["cause"] in {"serial_killer", "ghost_revenge", "magician", "magician_wrong_guess"} for a in target_attacks):
@@ -624,10 +693,11 @@ def resolve_night(room):
     for p in room.players.values():
         p["visited_by"] = []
         p["visited_last_night"] = None
+        p["_night_report_texts"] = []
 
     blocked_by_police = set()
     trapped_actor_ids = set()
-    doctor_targets = set()
+    doctor_targets = {}
     visitors_by_house = {}
 
     # 行動先を先に記録。魔術師は「家を出ない」、ボマー起爆も訪問しない。
@@ -697,46 +767,81 @@ def resolve_night(room):
 
     # ============================================================
     # 3. トラッパー、ポリス
+    #    同順位内でも「止められた側の能力は発動しない」。
     # ============================================================
-    for pid, action in actions.items():
-        actor = room.players.get(pid)
-        if not actor or not actor["alive"] or get_effective_role(actor) != "police":
-            continue
-        target = room.players.get(action.get("target_id"))
-        if not target or not target["alive"]:
-            continue
-        if get_effective_role(target) == "serial_killer":
-            add_report(actor, f"{target['name']} はポリスでは止められませんでした。")
-            continue
-        blocked_by_police.add(target["id"])
-        add_report(target, "ポリスによって今夜の能力を封じられました。")
+    # 順位2で死亡した人は、そもそも順位3以降の訪問/能力を行っていない扱い。
+    for house_id in list(visitors_by_house):
+        visitors_by_house[house_id] = [v for v in visitors_by_house[house_id] if v.get("alive")]
+    for p in room.players.values():
+        if not p.get("alive"):
+            p["visited_last_night"] = None
 
+    # まず各トラッパーについて、罠に掛かる候補を1人だけ仮決定。
+    trap_catches = {}
     for pid, action in actions.items():
         actor = room.players.get(pid)
         if not actor or not actor["alive"] or get_effective_role(actor) != "trapper":
-            continue
-        if pid in blocked_by_police:
             continue
         target_id = action.get("target_id")
         if not target_id or target_id == "pass":
             continue
         candidates = [
             v for v in visitors_by_house.get(target_id, [])
-            if v["id"] != actor["id"]
-            and v["alive"]
+            if v["id"] != actor["id"] and v["alive"]
             and get_effective_role(v) not in {"serial_killer", "magician"}
         ]
         if candidates:
-            victim = random.choice(candidates)
-            trapped_actor_ids.add(victim["id"])
-            add_report(victim, "今夜、罠にかかって能力を封じられました。")
+            trap_catches[pid] = random.choice(candidates)["id"]
 
-    # Policeの「出なかった」判定は3位で確定。
+    tentative_trapped = set(trap_catches.values())
+
+    # 罠に掛かっていないポリスだけが同順位の停止を発動できる。
+    # さらにポリスに狙われたポリスは、その同順位の行動を発動できない。
+    police_intents = {}
     for pid, action in actions.items():
         actor = room.players.get(pid)
-        if not actor or not actor["alive"] or get_effective_role(actor) != "police":
+        if not actor or not actor["alive"] or get_effective_role(actor) != "police" or pid in tentative_trapped:
             continue
         target = room.players.get(action.get("target_id"))
+        if target and target["alive"] and get_effective_role(target) != "serial_killer":
+            police_intents[pid] = target["id"]
+        elif target and target["alive"] and get_effective_role(target) == "serial_killer":
+            add_report(actor, f"{target['name']} はポリスでは止められませんでした。")
+
+    police_targeted_police = {
+        target_id for target_id in police_intents.values()
+        if target_id in room.players and get_effective_role(room.players[target_id]) == "police"
+    }
+    active_police = {pid for pid in police_intents if pid not in police_targeted_police}
+    blocked_by_police = {police_intents[pid] for pid in active_police}
+    # ポリス同士の相互停止は両者とも能力不発として扱う。
+    for pid, target_id in police_intents.items():
+        if target_id in police_targeted_police:
+            blocked_by_police.add(target_id)
+
+    # ポリスで止められたトラッパーの罠は不発。
+    active_trappers = {pid for pid in trap_catches if pid not in blocked_by_police}
+    trapped_actor_ids = {trap_catches[pid] for pid in active_trappers}
+
+    # 最終的に罠に掛かったポリスの停止能力も不発にする。
+    active_police = {pid for pid in active_police if pid not in trapped_actor_ids}
+    blocked_by_police = {police_intents[pid] for pid in active_police}
+    for pid in active_police:
+        target = room.players.get(police_intents[pid])
+        if target:
+            add_report(target, "ポリスによって今夜の能力を封じられました。")
+
+    # 罠の命中はトラッパー本人だけに通知し、誰が掛かったかは伏せる。
+    for trapper_id in active_trappers:
+        if trap_catches.get(trapper_id) in trapped_actor_ids:
+            trapper = room.players.get(trapper_id)
+            if trapper:
+                add_report(trapper, "今夜、仕掛けた罠に誰かが引っかかりました。")
+
+    # Policeの「出なかった」判定。停止されたポリス自身には結果を出さない。
+    for pid in active_police:
+        actor = room.players.get(pid)
+        target = room.players.get(police_intents.get(pid))
         if target and target["alive"] and target["id"] not in visitors_by_house:
             add_report(actor, f"{target['name']} は今夜、家を出ませんでした。")
 
@@ -752,8 +857,8 @@ def resolve_night(room):
             continue
         target = room.players.get(action.get("target_id"))
         if target and target["alive"]:
-            doctor_targets.add(target["id"])
-            add_report(target, "ドクターがあなたを訪問しました。")
+            doctor_targets.setdefault(target["id"], []).append(actor["id"])
+            add_report(target, "誰かがあなたを訪問しました。")
 
     rank4 = []
     bomb_detonations = set()
@@ -851,29 +956,35 @@ def resolve_night(room):
             continue
         role = get_effective_role(actor)
         target = room.players.get(action.get("target_id"))
-        if not target or not target["alive"]:
+        if not target:
             continue
         if role == "mouse":
+            # 対象が同じ夜の上位処理で死亡していても、使用した1回は消費する。
+            add_public_report(room, "ねずみの能力が使用されました。")
+            if actor["role"] != "fool":
+                consume_use(actor, "mouse")
             actual_role = target["role"]
             actual_camp = get_camp(target)
             if actor["role"] == "fool":
                 fake_role = random.choice(list(ROLE_CONFIGS.keys()))
-                result = f"{target['name']} は {role_name(fake_role)} / {ROLE_CONFIGS[fake_role]['camp']}"
+                result = f"{target['name']} は {role_name(fake_role)} / {camp_name(ROLE_CONFIGS[fake_role]['camp'])}"
             else:
-                result = f"{target['name']} は {role_name(actual_role)} / {actual_camp}"
+                # 対象が同じ夜に死亡していても、ねずみは実際の役職/陣営を取得する。
+                result = f"{target['name']} は {role_name(actual_role)} / {camp_name(actual_camp)}"
             actor["mouse_results"].append(result)
             add_report(actor, result)
-            add_public_report(room, "ねずみの能力が使用されました。")
-            if actor["role"] != "fool":
-                consume_use(actor, "mouse")
         elif role == "investigator":
+            if not target["alive"]:
+                add_report(actor, f"{target['name']} の役職候補: わからない")
+                continue
             target_role = target["role"]
             target_camp = get_camp(target)
             if target.get("public_role_unknown") or target.get("cleaned") or target.get("cleaned_by_cleaner") or target.get("cleaned_by_blaimer"):
                 add_report(actor, f"{target['name']} の役職候補: わからない")
                 continue
             if target_camp == "innocent":
-                wrong_camp = random.choice(["imposter", "neutral"])
+                neutral_exists = any(get_camp(p) == "neutral" for p in room.players.values())
+                wrong_camp = random.choice(["imposter", "neutral"] if neutral_exists else ["imposter"])
                 wrong_pool = [r for r in ROLE_CONFIGS if _role_allowed_in_camp(r, wrong_camp) and r != target_role]
                 wrong = random.choice(wrong_pool)
                 wrong_label = f"{role_name(wrong)}（{camp_name(wrong_camp)}）"
@@ -883,7 +994,9 @@ def resolve_night(room):
                 wrong_label = f"{role_name(wrong)}（イノセント）"
             choices = [f"{role_name(target_role)}（{camp_name(target_camp)}）", wrong_label]
             random.shuffle(choices)
-            actor["investigator_results"].append(f"{target['name']} の役職候補: {' / '.join(choices)}")
+            result = f"{target['name']} の役職候補: {' / '.join(choices)}"
+            actor["investigator_results"].append(result)
+            add_report(actor, result)
 
     # ============================================================
     # 8. トラッカー、ルックアウト
@@ -949,10 +1062,6 @@ def resolve_night(room):
             actor["last_target"] = action.get("target_id")
         elif role == "police":
             actor["last_target"] = action.get("target_id")
-
-    for player in room.players.values():
-        if player["investigator_results"]:
-            add_report(player, player["investigator_results"][-1])
 
     room.pending_mouse_reports.clear()
     flush_public_deaths(room)
@@ -1095,6 +1204,7 @@ def reset_room_for_rematch(room):
         player["cleaned"] = False
         player["public_role_unknown"] = False
         player["private_reports"] = []
+        player["_night_report_texts"] = []
         player["day_announcements"] = []
         player["investigator_results"] = []
         player["mouse_results"] = []
@@ -1148,7 +1258,7 @@ async def join_room(room_code: str, data: Dict[str, Any]):
     if existing:
         if not existing.get("connected", True):
             existing["connected"] = True
-            return {"ui_version": "v12-fixed", "room_code": room.room_code, "player_id": existing["id"], "is_host": existing["is_host"], "rejoined": True}
+            return {"ui_version": "v13-fixed", "room_code": room.room_code, "player_id": existing["id"], "is_host": existing["is_host"], "rejoined": True}
         raise HTTPException(status_code=400, detail="同じ名前のプレイヤーがいます")
 
     player_id = uuid.uuid4().hex
@@ -1167,7 +1277,7 @@ async def join_room(room_code: str, data: Dict[str, Any]):
         room.host_id = player_id
 
     return {
-        "ui_version": "v12-fixed",
+        "ui_version": "v13-fixed",
         "room_code": room.room_code,
         "player_id": player_id,
         "is_host": is_host
@@ -1257,10 +1367,11 @@ async def update_settings(room_code: str, req: SettingsRequest):
 
     if req.faction_distribution is not None:
         for camp in ["innocent", "imposter", "neutral"]:
-            room.faction_distribution[camp] = max(
-                0,
-                int(req.faction_distribution.get(camp, 0))
-            )
+            room.faction_distribution[camp] = max(0, int(req.faction_distribution.get(camp, 0)))
+    room.faction_random = {"imposter": False, "neutral": False}
+    for camp in (req.faction_random or []):
+        if camp in room.faction_random:
+            room.faction_random[camp] = True
 
     return {
         "ok": True
@@ -1367,7 +1478,7 @@ async def get_player_info(room_code: str, player_id: str):
     role = player["role"]
 
     return {
-        "ui_version": "v12-fixed",
+        "ui_version": "v13-fixed",
         "room_code": room.room_code,
         "player_id": player_id,
         "name": player["name"],
@@ -1470,7 +1581,9 @@ async def send_action(room_code: str, req: ActionRequest):
         attack_target = validate_target(room, req.player_id, req.attack_target_id)
 
     # インポスターは「役職能力」か「襲撃」のどちらか一方だけ。
-    if get_camp(player) == "imposter" and not attack_is_pass and not is_pass:
+    # ボマーの起爆のように target_id=pass でも能力を使うケースを含めて判定する。
+    role_ability_selected = (not is_pass) or (role == "bomber" and req.bomb_action == "detonate")
+    if get_camp(player) == "imposter" and not attack_is_pass and role_ability_selected:
         raise HTTPException(status_code=400, detail="インポスターは役職能力か襲撃のどちらか一方だけ選択できます")
 
     # Fool has no real ability.
@@ -1478,10 +1591,24 @@ async def send_action(room_code: str, req: ActionRequest):
         # Fool can submit a fake-looking action, but it has no effect.
         room.actions[req.player_id] = action
     else:
-        # パスなら役職固有の「対象必須」チェックを行わない。
-        if not is_pass:
+        # 起爆は対象不要だが役職固有チェック（設置済み爆弾の有無）は行う。
+        if not is_pass or (role == "bomber" and req.bomb_action == "detonate"):
             check_role_action_valid(room, player, target, action)
         room.actions[req.player_id] = action
+
+    # 自分が選択した内容も個人履歴へ残す。
+    target_name = target["name"] if target else "何もしない"
+    if role == "bomber" and req.bomb_action == "detonate":
+        action_text = "起爆（設置済み爆弾すべて）"
+    elif get_camp(player) == "imposter" and not attack_is_pass:
+        action_text = f"襲撃 → {attack_target['name']}"
+    elif is_pass:
+        action_text = "何もしない"
+    else:
+        action_text = f"{display_role_for(player)} → {target_name}"
+        if role == "magician" and req.guessed_role:
+            action_text += f"（予想: {role_name(req.guessed_role)}）"
+    add_action_history(player, f"{room.day_count}日目 夜・選択: {action_text}")
 
     if len(room.actions) >= len(alive_players(room)):
         resolve_night(room)
