@@ -2,20 +2,38 @@
 function renderChat(info) {
     const title = document.getElementById("chatTitle");
     const box = document.getElementById("chatMessages");
+    const deadBox = document.getElementById("deadChatMessages");
+    const deadSection = document.getElementById("deadChatSection");
+    const input = document.getElementById("chatInput");
+    const sendButton = document.getElementById("chatSendButton");
     if (!title || !box) return;
-    title.innerText = info.chat_channel === "dead" ? "死者チャット" : "生存者チャット";
-    const wasNearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-    box.innerHTML = "";
-    (info.chat_messages || []).forEach(m => {
-        const row = document.createElement("div");
-        row.style.cssText = "padding:4px 2px;overflow-wrap:anywhere;";
-        const name = document.createElement("b");
-        name.innerText = `${m.name}: `;
-        const msg = document.createElement("span");
-        msg.innerText = m.message;
-        row.appendChild(name); row.appendChild(msg); box.appendChild(row);
-    });
-    if (wasNearBottom) box.scrollTop = box.scrollHeight;
+
+    const renderRows = (target, messages) => {
+        const wasNearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 40;
+        target.innerHTML = "";
+        (messages || []).forEach(m => {
+            const row = document.createElement("div"); row.style.cssText = "padding:4px 2px;overflow-wrap:anywhere;";
+            const name = document.createElement("b"); name.innerText = `${m.name}: `;
+            const msg = document.createElement("span"); msg.innerText = m.message;
+            row.appendChild(name); row.appendChild(msg); target.appendChild(row);
+        });
+        if (wasNearBottom) target.scrollTop = target.scrollHeight;
+    };
+
+    if (info.alive) {
+        title.innerText = "生存者チャット";
+        renderRows(box, info.alive_chat_messages || info.chat_messages || []);
+        if (deadSection) deadSection.style.display = "none";
+        if (input) { input.disabled = false; input.placeholder = "メッセージを入力"; }
+        if (sendButton) sendButton.disabled = false;
+    } else {
+        title.innerText = "生存者チャット（閲覧のみ）";
+        renderRows(box, info.alive_chat_messages || []);
+        if (deadSection) deadSection.style.display = "block";
+        if (deadBox) renderRows(deadBox, info.dead_chat_messages || []);
+        if (input) { input.disabled = false; input.placeholder = "死者チャットへメッセージを入力"; }
+        if (sendButton) sendButton.disabled = false;
+    }
 }
 
 async function handleSendChat() {
@@ -152,7 +170,9 @@ async function handleStartGame() {
         faction_random: [
             ...(document.getElementById("factionImposter").value === "random" ? ["imposter"] : []),
             ...(document.getElementById("factionNeutral").value === "random" ? ["neutral"] : [])
-        ]
+        ],
+        no_exile_on_half_abstain: document.getElementById("noExileOnHalfAbstain").checked,
+        show_vote_counts: document.getElementById("showVoteCounts").checked
     };
 
     try {
@@ -454,7 +474,7 @@ function renderResultActions(info) {
     if (voteBox) {
         if (vr && vr.expelled) voteBox.innerText = `直前の投票: ${vr.expelled.name} が追放されました`;
         else if (vr && vr.status === "tie") voteBox.innerText = "直前の投票: 同票のため追放者なし";
-        else if (vr && vr.status === "no_exile") voteBox.innerText = "直前の投票: 追放者なし";
+        else if (vr && (vr.status === "no_exile" || vr.status === "half_abstain_no_exile")) voteBox.innerText = vr.status === "half_abstain_no_exile" ? "直前の投票: 棄権が半数以上のため追放者なし" : "直前の投票: 追放者なし";
         else voteBox.innerText = "直前の投票: 今回の決着は投票以外で発生しました";
     }
     const list = document.getElementById("resultPlayersList");

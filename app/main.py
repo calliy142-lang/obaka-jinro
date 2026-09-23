@@ -90,6 +90,8 @@ class Room:
         self.role_distribution["investigator"] = 1
         self.faction_distribution = {"innocent": 2, "imposter": 1, "neutral": 0}
         self.faction_random = {"imposter": False, "neutral": False}
+        self.no_exile_on_half_abstain = False
+        self.show_vote_counts = False
 
         self.actions = {}
         self.votes = {}
@@ -122,6 +124,8 @@ class SettingsRequest(BaseModel):
     faction_distribution: Optional[Dict[str, int]] = None
     excluded_roles: Optional[List[str]] = None
     faction_random: Optional[List[str]] = None
+    no_exile_on_half_abstain: Optional[bool] = False
+    show_vote_counts: Optional[bool] = False
 
 
 class StartRequest(BaseModel):
@@ -851,9 +855,28 @@ def resolve_night(room):
         actor = room.players.get(pid)
         target = room.players.get(police_intents[pid])
         if target:
-            add_report(target, "ポリスによって今夜の能力を封じられました。")
-            if actor:
-                add_report(actor, f"{target['name']} の能力を封じました。")
+            target_action = actions.get(target["id"], {})
+            target_role = get_effective_role(target)
+            actually_acted = False
+            if target_action:
+                if get_camp(target) == "imposter" and target_action.get("attack_target_id") not in (None, "", "pass"):
+                    actually_acted = True
+                if target_role == "bomber" and target_action.get("bomb_action") == "detonate":
+                    actually_acted = True
+                if target_action.get("target_id") not in (None, "", "pass"):
+                    actually_acted = True
+            if actually_acted:
+                add_report(target, "ポリスによって今夜の能力を封じられました。")
+                if actor:
+                    add_report(actor, f"{target['name']} の能力を封じました。")
+            elif actor:
+                add_report(actor, f"{target['name']} は今夜、能力を使用していませんでした。")
+
+    # 停止・罠で不発になった行動は訪問成立扱いにしない。
+    for stopped_id in (set(blocked_by_police) | set(trapped_actor_ids)):
+        stopped = room.players.get(stopped_id)
+        if stopped:
+            stopped["visited_last_night"] = None
 
     # 罠の命中はトラッパー本人だけに通知し、誰が掛かったかは伏せる。
     for trapper_id in active_trappers:
@@ -1472,6 +1495,8 @@ async def update_settings(room_code: str, req: SettingsRequest):
     for camp in (req.faction_random or []):
         if camp in room.faction_random:
             room.faction_random[camp] = True
+    room.no_exile_on_half_abstain = bool(req.no_exile_on_half_abstain)
+    room.show_vote_counts = bool(req.show_vote_counts)
 
     return {
         "ok": True
@@ -1619,6 +1644,10 @@ async def get_player_info(room_code: str, player_id: str):
 
         "chat_channel": "alive" if player["alive"] else "dead",
         "chat_messages": list(room.chat_messages["alive" if player["alive"] else "dead"][-100:]),
+        "alive_chat_messages": list(room.chat_messages["alive"][-100:]),
+        "dead_chat_messages": list(room.chat_messages["dead"][-100:]) if not player["alive"] else [],
+        "no_exile_on_half_abstain": room.no_exile_on_half_abstain,
+        "show_vote_counts": room.show_vote_counts,
 
         "private_reports": list(player.get("private_reports", [])),
 
@@ -1822,13 +1851,37 @@ def resolve_voting(room):
         voter = room.players.get(voter_id)
         target = room.players.get(target_id) if target_id in room.players else None
         raw_votes.append({"voter": voter["name"] if voter else voter_id, "target": target["name"] if target else ("棄権" if target_id == "pass" else str(target_id))})
+    vote_counts = [{"name": room.players[pid]["name"], "votes": count} for pid, count in weighted_votes.items() if pid in room.players]
+    abstain_count = sum(1 for target_id in room.votes.values() if target_id == "pass")
+    eligible_count = len([p for p in alive if not p.get("skip_vote_next_day", False)])
     room.last_vote_result = {
         "votes": raw_votes,
-        "weighted_votes": [{"name": room.players[pid]["name"], "votes": count} for pid, count in weighted_votes.items() if pid in room.players],
+        "weighted_votes": vote_counts,
+        "vote_counts_visible": room.show_vote_counts,
+        "abstain_count": abstain_count,
         "expelled": None,
         "status": "pending",
     }
     room.votes = {}
+
+    # 設定ON時、投票可能者の半数以上が棄権なら最多票に関係なく追放なし。
+    if room.no_exile_on_half_abstain and eligible_count > 0 and abstain_count * 2 >= eligible_count:
+        room.last_vote_result["status"] = "half_abstain_no_exile"
+        room.message = f"棄権が半数以上（{abstain_count}/{eligible_count}）のため、追放者はいません。"
+        if room.show_vote_counts:
+            summary = " / ".join(f"{v['name']}: {v['votes']}票" for v in vote_counts) or "得票者なし"
+            room.system_messages.append("投票結果: " + summary + f" / 棄権: {abstain_count}票")
+        for p in alive:
+            p["provoked_bonus"] = 0; p["provoked_target_id"] = None; p["skip_vote_next_day"] = False
+        if check_win_condition(room):
+            return
+        room.phase = "NIGHT"; room.day_started_at = None
+        room.system_messages.append("夜になりました。夜のアクションを選択してください。")
+        return
+
+    if room.show_vote_counts:
+        summary = " / ".join(f"{v['name']}: {v['votes']}票" for v in vote_counts) or "得票者なし"
+        room.system_messages.append("投票結果: " + summary + f" / 棄権: {abstain_count}票")
 
     if not weighted_votes:
         room.last_vote_result["status"] = "no_exile"

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>おバカ人狼</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260923-v15">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260923-v16">
     <style>
         body {
             background: #f5f5f5;
@@ -168,11 +168,15 @@
         <div id="chatPanel" class="panel">
             <h3 id="chatTitle" style="margin-top:0;">生存者チャット</h3>
             <div id="chatMessages" style="height:180px;overflow-y:auto;border:1px solid #ddd;border-radius:6px;padding:8px;background:#fafafa;margin-bottom:8px;"></div>
+            <div id="deadChatSection" style="display:none;margin-top:12px;">
+                <h4 style="margin:0 0 6px;">死者チャット</h4>
+                <div id="deadChatMessages" style="height:150px;overflow-y:auto;border:1px solid #bbb;border-radius:6px;padding:8px;background:#f3f3f3;margin-bottom:8px;"></div>
+            </div>
             <div style="display:flex;gap:8px;">
                 <input id="chatInput" type="text" maxlength="300" placeholder="メッセージを入力" style="flex:1;min-width:0;">
-                <button onclick="handleSendChat()" style="padding:7px 14px;">送信</button>
+                <button id="chatSendButton" onclick="handleSendChat()" style="padding:7px 14px;">送信</button>
             </div>
-            <div style="font-size:.82em;color:#666;margin-top:6px;">生存者と死者は別チャットです。</div>
+            <div style="font-size:.82em;color:#666;margin-top:6px;">生存者は生存者チャットのみ書き込み可能。死者は生存者チャットを閲覧でき、死者チャットへ書き込めます。</div>
         </div>
 
 
@@ -185,6 +189,10 @@
                     昼の制限時間（秒）:
                     <input type="number" id="dayTimerInput" value="600" min="10" max="3600" style="width:80px;">
                 </label>
+            </div>
+            <div style="margin-bottom:15px;display:grid;gap:8px;">
+                <label><input type="checkbox" id="noExileOnHalfAbstain"> 棄権が投票可能者の半数以上なら処刑なし</label>
+                <label><input type="checkbox" id="showVoteCounts"> 投票後に各プレイヤーの得票数を公開する</label>
             </div>
 
             <div style="margin-top:10px;display:grid;gap:16px;">
@@ -468,7 +476,7 @@
 
 </div>
 
-<script src="/static/js/api.js?v=20260923-v15"></script>
-<script src="/static/js/app.js?v=20260923-v15"></script>
+<script src="/static/js/api.js?v=20260923-v16"></script>
+<script src="/static/js/app.js?v=20260923-v16"></script>
 </body>
 </html>
